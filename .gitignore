@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+
+# Build
+.next/
+dist/
+
+# Environment
+.env
+.env.local
+
+# Database
+*.db
+
+# Output (generated files)
+output/
+uploads/
+previews/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Reference files (large PDFs)
+*.pdf
+*.docx
+!references/README.md
