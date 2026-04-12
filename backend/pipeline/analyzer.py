@@ -1,7 +1,9 @@
 """AI Analysis module using Claude API.
 
-Takes scraped website data and parsed documents, produces structured
-brand analysis JSON for PPT generation.
+Supports phase-based analysis:
+  - brand_reality: Capabilities section only (Phase 1)
+  - market_structure: Capabilities + Competition (Phase 1+2)
+  - full: Everything (Phase 1+2+3+4)
 """
 import json
 from anthropic import Anthropic
@@ -9,160 +11,618 @@ from config import ANTHROPIC_API_KEY
 
 client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 
+# ── System Prompts ────────────────────────────────────────────
+
 SYSTEM_PROMPT = """You are a senior brand strategist at DynaBridge, a US-based brand consulting firm
-specializing in helping Chinese enterprises build global brands.
+specializing in helping Chinese enterprises build global brands in Western markets.
 
-Your task is to analyze a brand and produce a structured Brand Discovery report following
-DynaBridge's methodology: Capabilities → Competition → Consumer.
+You follow DynaBridge's Discovery methodology — a 3-step process:
+- Step 1: Capabilities — assess what the brand has built, how it executes, and where gaps exist
+- Step 2: Competition — map the competitive landscape, identify market roles, and find white space
+- Step 3: Consumer — understand who buys, why, what segments exist, and what unmet needs to target
 
-You must output valid JSON matching the exact schema provided. Be insightful, evidence-based,
-and strategic. Write in a professional consulting tone."""
+## Writing Style (match this exactly)
 
-ANALYSIS_PROMPT = """Analyze this brand and produce a complete Brand Discovery report.
+SLIDE TITLES: Must be ALL CAPS, descriptive, and opinionated — they state a finding, not a topic.
+  GOOD: "HOW COZYFIT WAS BUILT: EXECUTION FIRST"
+  GOOD: "A FUNCTIONAL, FEATURE-LED, VALUE-FOCUSED OFFER"
+  GOOD: "PRICE-PERFORMANCE DEFINES COZYFIT'S CURRENT POSITION"
+  BAD: "PRODUCT ANALYSIS" or "PRICING OVERVIEW" (too generic)
+
+BULLETS: Each bullet must be 2-3 sentences with specific evidence from the data provided.
+  GOOD: "Across all channels, CozyFit emphasizes comfort, stretch, and pockets — functional
+         benefits that match category table stakes. There is no emotional storytelling, aspirational
+         imagery, or lifestyle positioning anywhere on the site or Amazon listing."
+  BAD: "The brand has a good product offering." (too vague, no evidence)
+
+INSIGHT: A single provocative sentence that reframes the findings strategically — something a
+  CMO would underline. It should challenge assumptions, not summarize.
+  GOOD: "CozyFit has built a strong product — but not yet a brand."
+  BAD: "The brand has both strengths and weaknesses." (too generic)
+
+SUMMARY PARAGRAPHS: Write as flowing narrative paragraphs (3-5 sentences), not bullet points.
+  Connect findings to strategic implications in a way that sets up the next step.
+
+## Analysis Standards
+- Evidence-based: cite specific data points, prices, phrases from the provided content
+- Strategically honest: surface real weaknesses alongside strengths
+- Implication-driven: every observation should point to a "so what"
+- No filler: if you don't have data for a section, say what's missing and what you can infer
+
+You must output ONLY valid JSON. No markdown, no commentary before or after."""
+
+
+# ── Brand Reality Prompt (Phase 1) ────────────────────────────
+
+BRAND_REALITY_PROMPT = """Analyze this brand's current capabilities and produce a Brand Reality assessment.
 
 ## Brand Information
 - Brand Name: {brand_name}
 - Website URL: {brand_url}
 - Language: {language}
 
-## Website Content
+## Website Content (scraped)
 {scrape_data}
 
 ## Uploaded Documents
 {document_data}
 
-## Competitors
-{competitors}
+## E-Commerce Data
+{ecommerce_data}
 
-## Required Output Schema
+## Customer Reviews
+{review_data}
 
-Return a JSON object with this exact structure:
+## Analysis Instructions
+
+Assess the brand across these 7 dimensions. For each, write exactly 3 bullets
+(each 2-3 sentences long, citing specific evidence from the data). Then write one
+"insight" sentence — a provocative strategic reframe, not a summary.
+
+### 1. Execution Summary
+How was this brand built? Was it product-first, channel-first, or brand-first?
+What execution choices defined its trajectory? Infer the founding logic from
+website messaging, product range, pricing, channel presence.
+
+### 2. Product Offering
+What does the brand sell and how does it communicate? Analyze: core benefits emphasized,
+feature language (stretch, pockets, fabric claims), product range breadth (sizes, colors,
+categories), and whether there is emotional storytelling or purely functional communication.
+
+### 3. Product Fundamentals
+How strong is the actual product? Assess: materials/fabric quality signals, construction
+details, feature set vs. category norms, size range inclusivity, color range, SKU depth.
+Compare to competitor product claims if data is available. Are the fundamentals competitive?
+
+### 4. Pricing Position
+Where does the brand sit on the price spectrum? Cite actual price points from e-commerce data.
+Assess whether pricing matches brand aspirations. Compare to competitor pricing if available.
+Does the pricing strategy enable or limit growth?
+
+### 5. Channel Analysis
+How does the brand reach customers? Identify the primary growth engine (Amazon, DTC, wholesale).
+Assess website quality, e-commerce presence, social media mentions, DTC vs. multi-channel mix.
+Which channel drives the business and what does that dependency mean?
+
+### 6. Brand Challenges (identify exactly 3 distinct challenges)
+Find 3 real, specific weaknesses. Look for: naming issues, inconsistent messaging across channels,
+lack of emotional connection, unclear target audience, visual identity gaps, brand architecture
+problems, credibility gaps. Each challenge gets its own slide with 3 bullets and an insight.
+Frame challenge titles as clear statements of the problem (e.g., "THE BRAND NAME CREATES A
+STRUCTURAL CHALLENGE" not "NAMING ISSUES").
+
+### 7. Capabilities Summary
+A flowing paragraph (3-5 sentences) synthesizing: what this brand is good at (execution strengths),
+what it needs to fix (brand/perception gaps), and what must happen next. This is NOT bullets —
+write it as a connected narrative paragraph.
+
+## Required Output — return this exact JSON structure:
 
 {{
   "brand_name": "{brand_name}",
-  "date": "MONTH YEAR",
+  "date": "{date}",
 
   "capabilities": {{
     "execution_summary": {{
-      "title": "HOW [BRAND] WAS BUILT: ...",
-      "bullets": ["point 1", "point 2", "point 3"],
-      "insight": "One-sentence strategic insight in blue"
+      "title": "HOW {brand_name_upper} WAS BUILT: [DESCRIPTIVE PHRASE IN CAPS]",
+      "bullets": [
+        "2-3 sentence observation about founding/growth strategy with specific evidence from website or documents",
+        "2-3 sentence observation about key execution decisions that shaped the brand trajectory",
+        "2-3 sentence assessment of what this execution approach achieved and what it missed or deferred"
+      ],
+      "insight": "Single provocative sentence reframing the execution story — challenge an assumption",
+      "has_image": true
     }},
     "product_offer": {{
-      "title": "A FUNCTIONAL, FEATURE-LED...",
-      "bullets": ["point 1", "point 2", "point 3"],
-      "insight": "..."
+      "title": "[DESCRIPTIVE PRODUCT POSITIONING HEADLINE IN CAPS]",
+      "bullets": [
+        "2-3 sentences about product range with specific SKU/category/feature evidence from the data",
+        "2-3 sentences about how the brand communicates product benefits — what language does it use on site and listings",
+        "2-3 sentences assessing whether the offer is differentiated or follows category norms, and what that means"
+      ],
+      "insight": "Strategic reframe of the product positioning — what it enables and what it limits",
+      "has_image": true
+    }},
+    "product_fundamentals": {{
+      "title": "[PRODUCT FUNDAMENTALS ASSESSMENT HEADLINE IN CAPS]",
+      "bullets": [
+        "2-3 sentences about material/fabric quality, construction, and how it compares to competitors",
+        "2-3 sentences about feature set depth (pockets, stretch, breathability, etc.) relative to category norms",
+        "2-3 sentences about size/color range, SKU depth, and whether the product line covers the market adequately"
+      ],
+      "insight": "Strategic assessment of whether product fundamentals are a strength to build on or a gap to close"
     }},
     "pricing_position": {{
-      "title": "PRICE-PERFORMANCE DEFINES...",
-      "bullets": ["point 1", "point 2", "point 3"],
-      "insight": "..."
+      "title": "[PRICING STRATEGY HEADLINE IN CAPS — state the finding]",
+      "bullets": [
+        "2-3 sentences citing specific price points or ranges found on website/e-commerce with concrete numbers",
+        "2-3 sentences about how pricing messaging positions the brand — value language, promotional tactics, perceived tier",
+        "2-3 sentences about what the pricing strategy enables (trial, volume) and what it limits (premium perception, margins)"
+      ],
+      "insight": "Strategic implication of the pricing position for brand growth"
     }},
     "channel_analysis": {{
-      "title": "...",
-      "bullets": ["point 1", "point 2", "point 3"],
-      "insight": "..."
+      "title": "[CHANNEL STRATEGY HEADLINE IN CAPS — state the finding]",
+      "bullets": [
+        "2-3 sentences about primary distribution channel with specific evidence (Amazon ranking, review count, etc.)",
+        "2-3 sentences about secondary channels — DTC website quality, social media, wholesale/retail presence",
+        "2-3 sentences assessing channel strategy strengths and dependencies — what happens if the primary channel changes"
+      ],
+      "insight": "Strategic implication of channel choices for long-term brand building"
     }},
     "brand_challenges": [
       {{
-        "title": "...",
-        "bullets": ["point 1", "point 2", "point 3"],
-        "insight": "..."
+        "title": "[CHALLENGE 1: CLEAR PROBLEM STATEMENT IN CAPS]",
+        "bullets": [
+          "2-3 sentences with specific evidence of this challenge from website, listings, or reviews",
+          "2-3 sentences about how this challenge manifests in the customer experience or brand perception",
+          "2-3 sentences about what's at stake — the strategic risk if this isn't addressed"
+        ],
+        "insight": "Why this challenge matters strategically — connect to growth or positioning"
+      }},
+      {{
+        "title": "[CHALLENGE 2: CLEAR PROBLEM STATEMENT IN CAPS]",
+        "bullets": [
+          "2-3 sentences with specific evidence of this challenge",
+          "2-3 sentences about how it affects brand perception or customer experience",
+          "2-3 sentences about the strategic risk"
+        ],
+        "insight": "Strategic implication — what this blocks or limits"
+      }},
+      {{
+        "title": "[CHALLENGE 3: CLEAR PROBLEM STATEMENT IN CAPS]",
+        "bullets": [
+          "2-3 sentences describing this challenge with evidence",
+          "2-3 sentences about its impact",
+          "2-3 sentences about the path forward — frame as opportunity, not just problem"
+        ],
+        "insight": "Strategic reframe — how addressing this challenge unlocks the next stage"
       }}
     ],
-    "capabilities_summary": "2-3 sentence summary of brand capabilities"
+    "capabilities_summary": "A flowing paragraph of 3-5 sentences. Start with what the brand does well (execution strengths), then what it needs to fix (brand/perception gaps), then what must happen next. Write as connected prose, not bullets. End with a forward-looking statement that sets up the next phase of work.",
+    "claims_vs_perception": {{
+      "brand_claims": ["Specific claim the brand makes about itself — quote from website if possible", "Another specific claim"],
+      "customer_perception": ["What customers actually say — quote or paraphrase from reviews", "Another customer perception"],
+      "alignment": "Where claims and perception match — be specific about which claims hold up",
+      "gaps": "Where they diverge — this is the most strategically important finding. Be specific and cite evidence."
+    }}
+  }},
+
+  "next_steps": [
+    "Specific recommended action 1 tied directly to a finding above",
+    "Specific recommended action 2",
+    "Specific recommended action 3",
+    "Specific recommended action 4"
+  ]
+}}
+
+CRITICAL RULES:
+- Every bullet MUST be 2-3 sentences long with specific evidence. One-sentence bullets fail.
+- Titles MUST be ALL CAPS and state a finding/opinion, not a generic topic label
+- The insight field MUST be a single sentence a CMO would underline — provocative, not safe
+- brand_challenges MUST contain exactly 3 challenges, each with its own title/bullets/insight
+- capabilities_summary MUST be a paragraph, not bullet points
+- If data is missing for a section, say what's missing and infer from available data
+- Do NOT invent data points — but DO make strategic inferences from real data
+- Output ONLY the JSON object, nothing else"""
+
+
+# ── Market Structure Prompt (Phase 2) ─────────────────────────
+
+MARKET_STRUCTURE_PROMPT = """Analyze the competitive landscape for {brand_name} and produce a Market Structure assessment.
+
+## Brand Information
+- Brand Name: {brand_name}
+- Website URL: {brand_url}
+- Industry/Category context from Phase 1 capabilities analysis
+
+## Competitor List
+{competitors}
+
+## Competitor Website Data (scraped)
+{competitor_scrape_data}
+
+## Competitor E-Commerce Data
+{competitor_ecommerce_data}
+
+## Competitor Review Data
+{competitor_review_data}
+
+## Phase 1 Context (Brand Reality findings)
+{phase1_context}
+
+## Analysis Instructions
+
+### Market Overview
+Identify ALL notable competitors in the category (aim for 8-12 brands). Assess the overall
+market structure: is it mature, fragmented, consolidating? What dynamics shape competition?
+Where does {brand_name} currently fit?
+
+### Focused Competitor Review
+Select 4-6 competitors for deep analysis — the ones most relevant to {brand_name}'s positioning.
+Include a mix: direct competitors (similar price/product), aspirational competitors (where the
+brand wants to be), and adjacent competitors (different approach to same customer).
+
+### Individual Competitor Analysis
+For each focused competitor, provide:
+- POSITIONING: 3 bold-label statements about their market position. Use format:
+  "Target Audience: Who they serve and why" / "Price Point: $XX-$XX range and strategy" /
+  "Key Differentiator: What makes them distinct" / etc.
+- KEY LEARNINGS: 3 bold-label insights about what {brand_name} can learn. Use format:
+  "What works: specific thing they do well" / "Vulnerability: where they're exposed" /
+  "Learning for {brand_name}: specific takeaway"
+
+### Competitive Landscape Summary
+Identify 4 clear market roles (e.g., "Premium Lifestyle", "Heritage Authority", "Value Play",
+"Fashion-Forward"). Map each role to the brands that occupy it. Identify white space — specific
+positioning territory that no brand currently owns.
+
+### Competition Summary
+Write a flowing paragraph (3-5 sentences) synthesizing: what the competitive landscape looks like,
+which brands succeed and why, and where the opportunity lies for {brand_name}.
+
+## Required Output — return this exact JSON structure:
+
+{{
+  "competition": {{
+    "market_overview": {{
+      "title": "A [DESCRIPTIVE ADJECTIVE], [DESCRIPTIVE ADJECTIVE] [CATEGORY] MARKET",
+      "competitor_names": ["Brand A", "Brand B", "Brand C", "Brand D", "Brand E", "Brand F"],
+      "bullets": [
+        "2-3 sentences describing the overall market structure and competitive dynamics",
+        "2-3 sentences about key trends shaping competition — what's changing and why",
+        "2-3 sentences about where {brand_name} currently fits and what that position means"
+      ],
+      "insight": "Single provocative sentence capturing the competitive reality {brand_name} faces"
+    }},
+    "focused_competitors": ["Brand A", "Brand B", "Brand C", "Brand D"],
+    "competitor_analyses": [
+      {{
+        "name": "Competitor Name",
+        "banner_description": "One-line description of this competitor's role in the market",
+        "positioning": [
+          {{"label": "Target Audience", "detail": "Specific description of who they serve and the need they address"}},
+          {{"label": "Price Point", "detail": "Specific price range ($XX-$XX per piece) and pricing strategy"}},
+          {{"label": "Key Differentiator", "detail": "What specifically sets them apart — cite evidence from their site/listings"}},
+          {{"label": "Channel Strategy", "detail": "How they reach customers — DTC, wholesale, marketplace, etc."}}
+        ],
+        "key_learnings": [
+          {{"label": "What works", "detail": "Specific thing they do well that drives their success — with evidence"}},
+          {{"label": "Vulnerability", "detail": "Where they're exposed — a weakness {brand_name} could exploit"}},
+          {{"label": "Learning for {brand_name}", "detail": "Concrete takeaway — what should {brand_name} do differently because of this"}}
+        ]
+      }}
+    ],
+    "landscape_summary": {{
+      "market_roles": [
+        {{"role": "Role Name (e.g., Premium Lifestyle)", "brands": ["Brand1", "Brand2"], "description": "What defines this role"}},
+        {{"role": "Role Name", "brands": ["Brand3"], "description": "What defines this role"}},
+        {{"role": "Role Name", "brands": ["Brand4", "Brand5"], "description": "What defines this role"}},
+        {{"role": "Role Name", "brands": ["Brand6"], "description": "What defines this role"}}
+      ],
+      "white_space": "Specific positioning territory that no brand currently owns — be concrete about what this looks like",
+      "category_norms": [
+        "A norm/assumption most brands in this category share",
+        "Another shared assumption",
+        "A third shared assumption that could be challenged"
+      ]
+    }},
+    "competition_summary": "A flowing paragraph of 3-5 sentences. Synthesize: what the competitive landscape looks like, which brands succeed by owning a clear role, and where the white space opportunity lies for {brand_name}. End with a forward-looking statement about what claiming that white space requires."
+  }}
+}}
+
+CRITICAL RULES:
+- competitor_analyses MUST contain 4-6 entries — analyze real, specific competitors
+- Each competitor's positioning and key_learnings MUST have exactly 3 entries each
+- market_roles MUST contain exactly 4 roles that cover the market structure
+- Titles must be ALL CAPS and descriptive
+- competition_summary must be a paragraph, not bullets
+- If competitor data is limited, infer from available evidence and state what you're inferring
+- Output ONLY the JSON object, nothing else"""
+
+
+# ── Full Analysis Prompt (all phases) ─────────────────────────
+
+FULL_ANALYSIS_PROMPT = """Produce a complete Brand Discovery report for {brand_name}.
+
+## Brand Information
+- Brand Name: {brand_name}
+- Website URL: {brand_url}
+- Language: {language}
+
+## Website Content (scraped)
+{scrape_data}
+
+## Uploaded Documents
+{document_data}
+
+## E-Commerce Data
+{ecommerce_data}
+
+## Customer Reviews
+{review_data}
+
+## Competitors
+{competitors}
+
+## Competitor Data
+{competitor_data}
+
+## Analysis Instructions
+
+This is a FULL discovery report covering all 3 steps. Follow the structure precisely.
+
+### Step 1: Capabilities
+Analyze the brand across 7 dimensions: execution summary, product offer, product fundamentals,
+pricing position, channel analysis, 3 brand challenges, and a capabilities summary paragraph.
+Each slide needs 3 bullets (2-3 sentences each) + 1 insight sentence.
+
+### Step 2: Competition
+Map the competitive landscape: market overview (8-12 brands), focused review (4-6 deep dives),
+landscape summary (4 market roles), and competition summary paragraph.
+
+### Step 3: Consumer
+This is the MOST important section. Based on available review data, e-commerce data, and any
+uploaded research documents, build a comprehensive consumer analysis:
+
+1. Research approach description
+2. Shopping habits and purchase drivers (generate chart data from reviews/e-commerce signals)
+3. Brand perception analysis
+4. Consumer segmentation: identify 4-5 distinct consumer segments based on the data:
+   - Give each a memorable name and a tagline ("I want...")
+   - Write a "Meet the [Segment]" narrative paragraph (5-7 sentences covering who they are,
+     how they shop, what they need, what frustrates them, and what they want)
+   - Estimate segment size (% of market) based on review/data patterns
+   - List demographic indicators, shopping behaviors, pain points
+5. Target audience recommendation: which segment should {brand_name} prioritize and why
+6. Consumer summary paragraph
+
+## Required Output — return this exact JSON:
+
+{{
+  "brand_name": "{brand_name}",
+  "date": "{date}",
+
+  "capabilities": {{
+    "execution_summary": {{
+      "title": "HOW {brand_name_upper} WAS BUILT: [DESCRIPTIVE PHRASE]",
+      "bullets": ["2-3 sentence point with evidence", "2-3 sentence point", "2-3 sentence point"],
+      "insight": "Provocative single sentence reframe",
+      "has_image": true
+    }},
+    "product_offer": {{
+      "title": "[DESCRIPTIVE PRODUCT HEADLINE IN CAPS]",
+      "bullets": ["2-3 sentence point with evidence", "2-3 sentence point", "2-3 sentence point"],
+      "insight": "Strategic reframe",
+      "has_image": true
+    }},
+    "product_fundamentals": {{
+      "title": "[PRODUCT FUNDAMENTALS HEADLINE IN CAPS]",
+      "bullets": ["2-3 sentence point", "2-3 sentence point", "2-3 sentence point"],
+      "insight": "Strategic assessment"
+    }},
+    "pricing_position": {{
+      "title": "[PRICING HEADLINE IN CAPS]",
+      "bullets": ["2-3 sentence point with prices", "2-3 sentence point", "2-3 sentence point"],
+      "insight": "Strategic implication"
+    }},
+    "channel_analysis": {{
+      "title": "[CHANNEL HEADLINE IN CAPS]",
+      "bullets": ["2-3 sentence point", "2-3 sentence point", "2-3 sentence point"],
+      "insight": "Strategic implication"
+    }},
+    "brand_challenges": [
+      {{
+        "title": "[CHALLENGE 1 STATEMENT IN CAPS]",
+        "bullets": ["2-3 sentence point", "2-3 sentence point", "2-3 sentence point"],
+        "insight": "Strategic implication"
+      }},
+      {{
+        "title": "[CHALLENGE 2 STATEMENT IN CAPS]",
+        "bullets": ["2-3 sentence point", "2-3 sentence point", "2-3 sentence point"],
+        "insight": "Strategic implication"
+      }},
+      {{
+        "title": "[CHALLENGE 3 STATEMENT IN CAPS]",
+        "bullets": ["2-3 sentence point", "2-3 sentence point", "2-3 sentence point"],
+        "insight": "Strategic reframe — path forward"
+      }}
+    ],
+    "capabilities_summary": "Flowing paragraph 3-5 sentences: execution strengths + brand gaps + what needs to happen next",
+    "claims_vs_perception": {{
+      "brand_claims": ["Specific claim from website/listings"],
+      "customer_perception": ["What customers say in reviews"],
+      "alignment": "Where they match",
+      "gaps": "Where they diverge — cite evidence"
+    }}
   }},
 
   "competition": {{
     "market_overview": {{
-      "title": "A MATURE, HIGHLY DEFINED ... MARKET",
-      "competitor_names": ["Brand A", "Brand B", ...],
-      "insight": "..."
+      "title": "A [ADJ], [ADJ] [CATEGORY] MARKET",
+      "competitor_names": ["Brand1", "Brand2", "Brand3", "Brand4", "Brand5", "Brand6"],
+      "bullets": ["2-3 sentence market structure", "2-3 sentence trends", "2-3 sentence brand position"],
+      "insight": "Competitive reality sentence"
     }},
-    "focused_competitors": ["Brand A", "Brand B", ...],
+    "focused_competitors": ["Brand A", "Brand B", "Brand C", "Brand D"],
     "competitor_analyses": [
       {{
         "name": "Competitor Name",
+        "banner_description": "One-line role description",
         "positioning": [
-          {{"label": "Role descriptor", "detail": "explanation"}},
-          {{"label": "...", "detail": "..."}},
-          {{"label": "...", "detail": "..."}}
+          {{"label": "Target Audience", "detail": "Specific who and why"}},
+          {{"label": "Price Point", "detail": "$XX-$XX and strategy"}},
+          {{"label": "Key Differentiator", "detail": "Evidence-based"}}
         ],
         "key_learnings": [
-          {{"label": "Learning title", "detail": "explanation"}},
-          {{"label": "...", "detail": "..."}},
-          {{"label": "...", "detail": "..."}}
+          {{"label": "What works", "detail": "Specific strength with evidence"}},
+          {{"label": "Vulnerability", "detail": "Where they're exposed"}},
+          {{"label": "Learning for {brand_name}", "detail": "Concrete takeaway"}}
         ]
       }}
     ],
-    "competition_summary": "2-3 sentence summary of the competitive landscape and white space opportunity",
-    "competitive_summary": {{
-      "market_roles": ["Role 1", "Role 2", ...],
-      "white_space": "Where opportunities exist",
-      "category_norms": ["Norm 1", "Norm 2", ...]
-    }}
+    "landscape_summary": {{
+      "market_roles": [
+        {{"role": "Role Name", "brands": ["Brand1", "Brand2"], "description": "What defines this role"}},
+        {{"role": "Role Name", "brands": ["Brand3"], "description": "What defines this role"}},
+        {{"role": "Role Name", "brands": ["Brand4"], "description": "What defines this role"}},
+        {{"role": "Role Name", "brands": ["Brand5", "Brand6"], "description": "What defines this role"}}
+      ],
+      "white_space": "Specific unclaimed positioning territory",
+      "category_norms": ["Shared norm 1", "Shared norm 2", "Shared norm 3"]
+    }},
+    "competition_summary": "Flowing paragraph 3-5 sentences synthesizing competitive landscape and opportunity"
   }},
 
   "consumer": {{
-    "overview": "Brief consumer landscape summary",
+    "overview": "2-3 sentence consumer landscape summary — who buys in this category and what matters to them",
     "research_approach": [
-      {{"label": "Format", "detail": "e.g. Online survey"}},
-      {{"label": "Sample", "detail": "e.g. N=500"}},
-      {{"label": "Participants", "detail": "Description"}},
-      {{"label": "Analysis", "detail": "Method"}},
-      {{"label": "Timing", "detail": "When"}}
+      {{"label": "Format", "detail": "e.g. Review analysis + e-commerce data mining + secondary research"}},
+      {{"label": "Data Sources", "detail": "e.g. Amazon reviews (N=XXX), brand website, competitor listings"}},
+      {{"label": "Participants", "detail": "Description of the consumer base analyzed"}},
+      {{"label": "Analysis", "detail": "Method used — sentiment analysis, theme extraction, segmentation"}},
+      {{"label": "Timing", "detail": "{date}"}}
     ],
     "charts": [
       {{
         "chart_type": "dual",
-        "title": "CHART TITLE (ALL CAPS)",
-        "subtitle": "Optional italic context line",
-        "left_title": "Question for left chart",
-        "left_categories": ["Cat1", "Cat2"],
-        "left_values": [50, 50],
+        "title": "SHOPPING HABITS IN ALL CAPS",
+        "subtitle": "Context for the data",
+        "left_title": "Purchase frequency or channel question",
+        "left_categories": ["Category1", "Category2", "Category3"],
+        "left_values": [40, 35, 25],
         "left_type": "donut",
-        "right_title": "Question for right chart",
-        "right_categories": ["Cat1", "Cat2"],
-        "right_values": [60, 40],
+        "right_title": "Where/how they shop question",
+        "right_categories": ["Channel1", "Channel2", "Channel3", "Channel4"],
+        "right_values": [60, 45, 30, 20],
         "right_type": "hbar"
       }},
       {{
         "chart_type": "hbar",
-        "title": "CHART TITLE",
-        "question": "Full question text",
-        "categories": ["Cat1", "Cat2"],
-        "values": [50, 30]
+        "title": "PURCHASE DRIVERS IN ALL CAPS",
+        "subtitle": "Based on review theme analysis",
+        "question": "What matters most when purchasing?",
+        "categories": ["Driver1", "Driver2", "Driver3", "Driver4", "Driver5"],
+        "values": [65, 48, 42, 35, 28]
+      }},
+      {{
+        "chart_type": "hbar",
+        "title": "BRAND AWARENESS IN ALL CAPS",
+        "subtitle": "Based on review mentions and cross-shopping behavior",
+        "question": "Which brands do consumers mention or compare?",
+        "categories": ["Brand1", "Brand2", "Brand3", "Brand4", "Brand5"],
+        "values": [75, 60, 45, 30, 20]
       }}
+    ],
+    "verbatim_quotes": [
+      {{"theme": "Theme name (e.g., Comfort)", "quotes": ["Direct quote from review 1", "Direct quote from review 2", "Direct quote from review 3"]}},
+      {{"theme": "Another theme", "quotes": ["Quote 1", "Quote 2", "Quote 3"]}}
     ],
     "segments": [
       {{
         "name": "Segment Name",
-        "description": "Who they are",
-        "needs": ["Need 1", "Need 2"],
-        "behaviors": ["Behavior 1", "Behavior 2"]
+        "tagline": "I want [what this segment prioritizes]",
+        "size_pct": 27,
+        "narrative": "Meet the [Segment Name]: A 5-7 sentence narrative paragraph. Start with a vivid character description. Then cover: who they are demographically, how they work/live, how they shop for this category, what matters most to them, what frustrates them, and what would win their loyalty. Write in a journalistic, engaging style — this is a story, not a data dump. Use specific details and percentages where available.",
+        "demographics": {{
+          "primary_role": "Most common role/profession",
+          "age_skew": "e.g., 58% Millennial, 23% Gen X",
+          "income": "e.g., 51% upper-middle income",
+          "gender_split": "e.g., 67% female, 33% male"
+        }},
+        "shopping_behavior": {{
+          "annual_spend": "$XXX median",
+          "primary_channel": "Where they buy most",
+          "purchase_frequency": "How often they buy",
+          "brand_loyalty": "High/Medium/Low — with reasoning"
+        }},
+        "top_needs": ["Need 1 with percentage if available", "Need 2", "Need 3"],
+        "pain_points": ["Pain point 1 with percentage if available", "Pain point 2", "Pain point 3"],
+        "what_premium_means": "What this segment considers premium — e.g., fabric tech, design, durability",
+        "lifestyle_signals": [
+          {{"category": "Social Media", "detail": "e.g., 78% use YouTube more than any other platform"}},
+          {{"category": "Style Identity", "detail": "e.g., practical and functional over trendy"}},
+          {{"category": "Wishlist", "detail": "e.g., better fit & sizing, fabric quality & durability"}}
+        ]
       }}
     ],
+    "target_recommendation": {{
+      "primary_segment": "Name of recommended primary target segment",
+      "title": "PRIMARY TARGET: [SEGMENT NAME] IN CAPS",
+      "rationale_bullets": [
+        "Reason 1 why this segment should be the primary target — with data",
+        "Reason 2 — connect to brand strengths",
+        "Reason 3 — connect to market opportunity",
+        "Reason 4 — connect to channel fit"
+      ],
+      "insight": "For this segment, [specific reframe of what premium/quality/value means to them]",
+      "enables": ["What targeting this segment unlocks — strategic benefit 1", "Strategic benefit 2", "Strategic benefit 3"],
+      "does_not_decide": ["What this choice does NOT determine yet", "Another open question", "Third open question"]
+    }},
+    "consumer_summary": "Flowing paragraph 3-5 sentences. Name the recommended segment, state why they matter, and connect to the brand's capabilities and competitive position. End with a forward-looking statement.",
     "key_insights": [
       {{
-        "title": "INSIGHT HEADLINE",
-        "bullets": ["point 1", "point 2", "point 3"],
-        "insight": "..."
+        "title": "KEY CONSUMER INSIGHT HEADLINE IN CAPS",
+        "bullets": [
+          "2-3 sentence insight about purchase behavior with evidence",
+          "2-3 sentence insight about unmet needs",
+          "2-3 sentence insight about brand perception or willingness to pay",
+          "2-3 sentence insight about channel or influence patterns"
+        ],
+        "insight": "Single sentence strategic reframe of consumer opportunity"
       }}
     ]
   }},
 
+  "summary_and_next_steps": {{
+    "capabilities_column": "Paragraph summarizing Step 1 findings — what the brand has built and what gaps remain",
+    "competition_column": "Paragraph summarizing Step 2 findings — competitive landscape and positioning opportunity",
+    "consumer_column": "Paragraph summarizing Step 3 findings — who to target and why",
+    "closing_insight": "Single powerful sentence tying all three together — what the brand needs to do next"
+  }},
+
   "next_steps": [
-    "Recommended action 1",
-    "Recommended action 2",
-    "Recommended action 3"
+    "Specific action 1 tied to capabilities findings",
+    "Specific action 2 tied to competitive positioning",
+    "Specific action 3 tied to consumer targeting",
+    "Specific action 4 tied to brand building"
   ]
 }}
 
-Be thorough, specific, and evidence-based. Reference actual data from the website and documents.
-If the language is "zh" or "en+zh", provide Chinese translations for all text fields as a parallel
-"_zh" suffixed field (e.g., "title" and "title_zh").
-"""
+CRITICAL RULES:
+- This is a COMPREHENSIVE report. Every section must be thorough and evidence-based.
+- segments MUST contain 4-5 entries. Each needs a full narrative paragraph (5-7 sentences).
+- brand_challenges MUST contain exactly 3 entries.
+- competitor_analyses MUST contain 4-6 entries.
+- All bullets must be 2-3 sentences, not single sentences.
+- All titles must be ALL CAPS and state a finding, not a generic topic.
+- All summary fields must be flowing paragraphs, not bullets.
+- Generate chart data that is plausible and grounded in available review/e-commerce evidence.
+- If the language is "zh" or "en+zh", add "_zh" suffixed fields for all text.
+- Output ONLY the JSON object, nothing else."""
 
+
+# ── Analysis Functions ────────────────────────────────────────
 
 async def analyze_brand(
     brand_name: str,
@@ -171,163 +631,713 @@ async def analyze_brand(
     document_data: list[dict],
     competitors: list[str],
     language: str = "en",
+    phase: str = "full",
+    ecommerce_data: dict = None,
+    review_data: dict = None,
+    competitor_data: list[dict] = None,
 ) -> dict:
-    """Run Claude AI analysis on brand data and return structured JSON."""
+    """Run Claude AI analysis on brand data and return structured JSON.
 
+    Args:
+        phase: "brand_reality" | "market_structure" | "full"
+    """
     if not client:
-        return _mock_analysis(brand_name)
+        return _mock_analysis(brand_name, phase)
 
-    # Format inputs for the prompt
-    scrape_text = ""
-    if scrape_data.get("pages"):
-        for page in scrape_data["pages"]:
-            scrape_text += f"\n### {page['title']} ({page['url']})\n{page['text'][:2000]}\n"
-
-    doc_text = ""
-    for doc in document_data:
-        doc_text += f"\n### {doc['filename']}\n{doc['text'][:3000]}\n"
-
+    # Format inputs
+    scrape_text = _format_scrape_data(scrape_data)
+    doc_text = _format_documents(document_data)
     comp_text = ", ".join(competitors) if competitors else "Not specified — identify key competitors"
+    comp_detail_text = _format_competitor_data(competitor_data) if competitor_data else "No competitor discovery data"
+    ecom_text = _format_ecommerce(ecommerce_data) if ecommerce_data else "No e-commerce data collected"
+    review_text = _format_reviews(review_data) if review_data else "No review data collected"
 
-    prompt = ANALYSIS_PROMPT.format(
-        brand_name=brand_name,
-        brand_url=brand_url,
-        language=language,
-        scrape_data=scrape_text or "No website data available",
-        document_data=doc_text or "No documents uploaded",
-        competitors=comp_text,
-    )
+    import datetime
+    date_str = datetime.datetime.now().strftime("%B %Y").upper()
+
+    if phase == "brand_reality":
+        prompt = BRAND_REALITY_PROMPT.format(
+            brand_name=brand_name,
+            brand_name_upper=brand_name.upper(),
+            brand_url=brand_url,
+            language=language,
+            scrape_data=scrape_text or "No website data available",
+            document_data=doc_text or "No documents uploaded",
+            ecommerce_data=ecom_text,
+            review_data=review_text,
+            date=date_str,
+        )
+        max_tokens = 8000
+    elif phase == "market_structure":
+        prompt = MARKET_STRUCTURE_PROMPT.format(
+            brand_name=brand_name,
+            brand_url=brand_url,
+            competitors=comp_text,
+            competitor_scrape_data=comp_detail_text,
+            competitor_ecommerce_data=comp_detail_text,
+            competitor_review_data=comp_detail_text,
+            phase1_context="[Phase 1 results would go here]",
+        )
+        max_tokens = 8000
+    else:
+        prompt = FULL_ANALYSIS_PROMPT.format(
+            brand_name=brand_name,
+            brand_name_upper=brand_name.upper(),
+            brand_url=brand_url,
+            language=language,
+            scrape_data=scrape_text or "No website data available",
+            document_data=doc_text or "No documents uploaded",
+            ecommerce_data=ecom_text,
+            review_data=review_text,
+            competitors=comp_text,
+            competitor_data=comp_detail_text,
+            date=date_str,
+        )
+        max_tokens = 16000
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=8000,
+        max_tokens=max_tokens,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
     )
 
-    # Extract JSON from response
     text = response.content[0].text
     try:
-        # Try to find JSON in the response
         start = text.find("{")
         end = text.rfind("}") + 1
         if start >= 0 and end > start:
-            return json.loads(text[start:end])
+            result = json.loads(text[start:end])
+            # Ensure brand_name and date are present
+            result.setdefault("brand_name", brand_name)
+            result.setdefault("date", date_str)
+            return result
     except json.JSONDecodeError:
         pass
 
-    return {"raw_analysis": text, "brand_name": brand_name}
+    return {"raw_analysis": text, "brand_name": brand_name, "date": date_str}
 
 
-def _mock_analysis(brand_name: str) -> dict:
-    """Return a mock analysis for development/testing."""
-    return {
-        "brand_name": brand_name,
+# ── Input Formatters ──────────────────────────────────────────
+
+def _format_scrape_data(scrape_data: dict) -> str:
+    if not scrape_data or not scrape_data.get("pages"):
+        return ""
+    parts = []
+    for page in scrape_data["pages"]:
+        parts.append(f"\n### {page.get('title', 'Page')} ({page.get('url', '')})\n{page.get('text', '')[:3000]}\n")
+    return "".join(parts)
+
+
+def _format_documents(documents: list[dict]) -> str:
+    if not documents:
+        return ""
+    parts = []
+    for doc in documents:
+        parts.append(f"\n### {doc.get('filename', 'Document')}\n{doc.get('text', '')[:5000]}\n")
+    return "".join(parts)
+
+
+def _format_competitor_data(data: list[dict]) -> str:
+    if not data:
+        return "No competitor discovery data"
+    parts = [f"### Auto-Discovered Competitors ({len(data)} found)"]
+    for c in data:
+        source = c.get("source", "unknown")
+        confidence = c.get("confidence", 0)
+        role = c.get("category_role", "")
+        reason = c.get("reason", "")
+        line = f"- {c['name']} (source: {source}, confidence: {confidence:.0%}"
+        if role:
+            line += f", role: {role}"
+        line += ")"
+        if reason:
+            line += f"\n  {reason}"
+        parts.append(line)
+    return "\n".join(parts)
+
+
+def _format_ecommerce(data: dict) -> str:
+    if not data:
+        return "No e-commerce data"
+    parts = []
+    if data.get("price_range"):
+        pr = data["price_range"]
+        parts.append(f"Price Range: ${pr.get('min', 'N/A')} - ${pr.get('max', 'N/A')} (avg ${pr.get('avg', 'N/A')})")
+    if data.get("rating_summary"):
+        rs = data["rating_summary"]
+        parts.append(f"Rating Summary: {rs.get('average', 'N/A')}/5 across {rs.get('total_products', 0)} products ({rs.get('total_reviews', 0)} total reviews)")
+    parts.append(f"\n### Products ({len(data.get('products', []))} found)")
+    for product in data.get("products", [])[:20]:
+        name = product.get("name", "Product")
+        price = product.get("price", "N/A")
+        rating = product.get("rating", "N/A")
+        reviews = product.get("review_count", 0)
+        desc = product.get("description", "")[:300]
+        features = ", ".join(product.get("features", [])[:5])
+        line = f"- {name}: ${price} | {rating}★ ({reviews} reviews)"
+        if desc:
+            line += f"\n  Description: {desc}"
+        if features:
+            line += f"\n  Features: {features}"
+        parts.append(line)
+    return "\n".join(parts) if parts else "No e-commerce data"
+
+
+def _format_reviews(data: dict) -> str:
+    if not data:
+        return "No reviews"
+    parts = []
+    if data.get("summary"):
+        s = data["summary"]
+        parts.append(f"### Review Summary")
+        parts.append(f"Average Rating: {s.get('average_rating', 'N/A')}/5 ({s.get('total_reviews', 0)} reviews)")
+        if s.get("rating_distribution"):
+            parts.append(f"Rating Distribution: {s['rating_distribution']}")
+    if data.get("sentiment"):
+        sent = data["sentiment"]
+        parts.append(f"\n### Sentiment Analysis")
+        parts.append(f"Positive: {sent.get('positive', 0)}% | Neutral: {sent.get('neutral', 0)}% | Negative: {sent.get('negative', 0)}%")
+    if data.get("themes"):
+        parts.append(f"\n### Top Themes from Reviews")
+        for theme in data.get("themes", [])[:10]:
+            parts.append(f"- {theme.get('theme', 'Theme')}: {theme.get('count', 0)} mentions ({theme.get('sentiment', 'mixed')} sentiment)")
+            for quote in theme.get("sample_quotes", [])[:2]:
+                parts.append(f'  "{quote}"')
+    parts.append(f"\n### Individual Reviews ({len(data.get('reviews', []))} collected)")
+    for review in data.get("reviews", [])[:40]:
+        stars = review.get("rating", "")
+        title = review.get("title", "")
+        text = review.get("text", "")[:300]
+        line = f"  [{stars}★]"
+        if title:
+            line += f" {title} —"
+        line += f" {text}"
+        parts.append(line)
+    return "\n".join(parts) if parts else "No reviews"
+
+
+# ── Mock Analysis ─────────────────────────────────────────────
+
+def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
+    """Return mock analysis for development/testing."""
+    bn = brand_name
+    BN = brand_name.upper()
+
+    capabilities = {
+        "execution_summary": {
+            "title": f"HOW {BN} WAS BUILT: EXECUTION FIRST",
+            "bullets": [
+                f"{bn} prioritized getting the product right, pricing competitively, and moving quickly to market. Early website messaging focuses entirely on functional benefits — comfort, stretch, pockets — with no origin story or brand narrative.",
+                f"Key execution decisions — launching on Amazon first, investing in product iteration over brand building, pricing below premium competitors — reveal a founder-led, product-first approach. These choices were pragmatic and effective for initial market entry.",
+                f"This execution-first mindset allowed {bn} to enter a crowded category, build a review base, and achieve sales velocity. But it deferred the harder work of brand definition, emotional positioning, and audience targeting — gaps that now limit growth potential.",
+            ],
+            "insight": f"{bn}'s early success was driven by strong execution choices rather than brand-led planning — but execution alone cannot sustain premium growth.",
+            "has_image": True,
+        },
+        "product_offer": {
+            "title": "A FUNCTIONAL, FEATURE-LED, VALUE-FOCUSED OFFER",
+            "bullets": [
+                f"Across channels, {bn} emphasizes comfort, fit, features, and affordability over emotional brand storytelling. Product pages list stretch fabric, multiple pockets, breathability, and easy care — functional benefits that match category table stakes.",
+                f"There is no emotional storytelling, aspirational imagery, or lifestyle positioning anywhere on the site or Amazon listings. The communication is purely rational: what the product does, not what wearing it means.",
+                f"The offer is easy to understand and compare, which supports trial and conversion on Amazon. But it also means {bn} is positioned as interchangeable with any competitor offering similar features at a similar price.",
+            ],
+            "insight": f"Today, {bn} presents itself as a practical, feature-driven solution — a strong product, but not yet a brand.",
+            "has_image": True,
+        },
+        "product_fundamentals": {
+            "title": f"PRODUCT FUNDAMENTALS ARE STRONG AND COMPETITIVE",
+            "bullets": [
+                f"{bn}'s fabric technology — 4-way stretch, moisture-wicking, wrinkle-resistant — matches or exceeds what premium competitors offer at higher price points. Customer reviews consistently praise the material quality and comfort over 12+ hour shifts.",
+                f"The feature set is competitive: multiple pockets (5-7 per piece), modern jogger-style pants, V-neck and mock-wrap top options, and a growing color range. These fundamentals meet the category's evolving expectations for modern medical apparel.",
+                f"Size range and SKU depth are adequate but not exceptional. The product line covers core categories (tops, pants, jackets) without venturing into accessories, underscrubs, or footwear — categories that drive loyalty and repeat purchases for competitors like FIGS.",
+            ],
+            "insight": f"The product is {bn}'s strongest asset — the fundamentals are competitive enough to support a premium position if the brand can build the perception to match.",
+        },
+        "pricing_position": {
+            "title": f"PRICE-PERFORMANCE DEFINES {BN}'S CURRENT POSITION",
+            "bullets": [
+                f"{bn} is positioned at $28-$42 per piece, placing it below premium lifestyle brands like FIGS ($38-$90) while offering comparable functional performance. This creates strong price-performance value that drives Amazon conversion.",
+                f"Pricing messaging reinforces value and practicality rather than exclusivity or aspirational status. Promotional language (deals, bundles, value packs) further anchors the brand in the accessible tier of the market.",
+                f"This pricing strategy supports trial acquisition and volume growth, but limits how premium the brand can feel today. Moving upmarket requires more than a price increase — it requires a brand story that justifies the higher price to the consumer.",
+            ],
+            "insight": f"{bn}'s role in the market is defined by strong price-performance rather than brand-led positioning — a solid foundation, but one that creates a ceiling if not evolved.",
+        },
+        "channel_analysis": {
+            "title": f"AMAZON DRIVES GROWTH AND TRUST",
+            "bullets": [
+                f"Primary distribution through Amazon, where {bn} has built a strong review base (2,000+ reviews, 4.3+ average rating) and consistent sales volume. Amazon's trust infrastructure — reviews, Prime shipping, easy returns — does the credibility work that the brand itself has not yet built.",
+                f"The brand website (Shopify) serves as a secondary DTC channel with limited lifestyle content, basic product photography, and minimal brand storytelling. It functions as a store, not as a brand experience.",
+                f"Social media presence exists across Instagram and Facebook but lacks consistent posting cadence, engagement strategy, or community building. There is no influencer program or ambassador strategy visible.",
+            ],
+            "insight": f"Amazon has been {bn}'s strongest growth engine — but the platform builds Amazon's brand, not {bn}'s. Long-term brand equity requires owning the customer relationship.",
+        },
+        "brand_challenges": [
+            {
+                "title": f"THE {BN} NAME CREATES A STRUCTURAL CHALLENGE",
+                "bullets": [
+                    f"The brand name signals comfort and coziness — attributes that, while appealing, may not convey the professional credibility, durability, or performance that healthcare professionals prioritize when choosing work apparel.",
+                    f"In a category where names like FIGS (fresh, clean) and Cherokee (heritage, authority) carry clear positioning, a comfort-focused name risks pigeonholing the brand before the consumer even sees the product.",
+                    f"This is not just a cosmetic issue — the name shapes first impressions on Amazon search results, affects click-through rates on listings, and influences whether healthcare professionals take the brand seriously as a professional choice.",
+                ],
+                "insight": "A brand name is the first promise a brand makes — and right now, it may be making the wrong one.",
+            },
+            {
+                "title": "BRAND NARRATIVE AND EMOTIONAL CONNECTION ARE ABSENT",
+                "bullets": [
+                    "No clear origin story, founder narrative, mission statement, or 'why we exist' messaging anywhere on the website or Amazon presence. The brand communicates only what it sells, never why it matters.",
+                    "Competitors like FIGS have built emotional connections through founder stories, healthcare worker advocacy, and community building. Cherokee leverages decades of heritage. Even value brands tell a story about accessibility and democratization.",
+                    f"Without a narrative, {bn} competes purely on features and price — the most vulnerable position in any consumer category. Any competitor can match features; no competitor can copy an authentic story.",
+                ],
+                "insight": "A brand without a story is a commodity waiting to be undercut — or a blank canvas waiting to be defined.",
+            },
+            {
+                "title": "THE NEXT STEP IS A CLEAR, RESEARCH-LED DECISION",
+                "bullets": [
+                    f"{bn} has reached an inflection point: the execution-first approach that built the business cannot take it to the next stage. What's needed now is not more product iteration, but strategic clarity about who the brand is for and what it stands for.",
+                    "This decision — brand positioning, target audience, naming strategy — cannot be made from intuition alone. It requires understanding what consumers actually want, how they perceive the brand today, and where unmet needs exist in the market.",
+                    "The good news: the product fundamentals and channel traction give the brand a strong foundation to build on. The risk: delaying this decision allows competitors to claim the positioning territory that could be theirs.",
+                ],
+                "insight": f"{bn} has built the engine — now it needs a destination. The next step is a clear, research-led brand strategy.",
+            },
+        ],
+        "capabilities_summary": (
+            f"{bn} is an execution-driven brand with competitive products and strong Amazon performance, "
+            "now facing the need to build a brand narrative, clarify its naming and brand architecture, "
+            "and develop emotional positioning to support long-term premium growth. The product fundamentals "
+            "are strong enough to support a more ambitious brand position — but the brand itself has not yet "
+            "been built. What comes next must be led by consumer insight and competitive clarity, not guesswork."
+        ),
+        "claims_vs_perception": {
+            "brand_claims": [
+                "Premium comfort and stretch for healthcare professionals",
+                "High-quality fabric technology at accessible prices",
+            ],
+            "customer_perception": [
+                "Comfortable and good value for the price — strong functional satisfaction",
+                "Not seen as a 'brand' — viewed as a good Amazon product, not a lifestyle choice",
+            ],
+            "alignment": "Customers confirm the comfort and value claims — the product delivers on its functional promises.",
+            "gaps": "The brand claims 'premium' but customers perceive 'good value' — there is a credibility gap between aspiration and perception that must be closed through brand building, not just product quality.",
+        },
+    }
+
+    result = {
+        "brand_name": bn,
         "date": "APRIL 2026",
-        "capabilities": {
-            "execution_summary": {
-                "title": f"HOW {brand_name.upper()} WAS BUILT: EXECUTION FIRST",
-                "bullets": [
-                    f"{brand_name} prioritized getting the product right, pricing competitively, and moving quickly to market.",
-                    "Early decisions focused on speed, operational efficiency, and reducing risk rather than building a formal brand strategy.",
-                    "This execution-first mindset allowed the business to enter a crowded category and scale rapidly.",
-                ],
-                "insight": f"{brand_name}'s early success was driven by strong execution choices rather than brand-led planning.",
-            },
-            "product_offer": {
-                "title": "A FUNCTIONAL, FEATURE-LED, VALUE-FOCUSED OFFER",
-                "bullets": [
-                    f"Across channels, {brand_name} emphasizes comfort, fit, features, and affordability over emotional brand storytelling.",
-                    "Product pages clearly communicate stretch, pockets, fabric performance, and everyday usability.",
-                    "The offer is easy to understand and compare, but largely follows category norms.",
-                ],
-                "insight": f"Today, {brand_name} presents itself as a practical, feature-driven solution more than as a clearly differentiated brand.",
-            },
-            "pricing_position": {
-                "title": f"PRICE-PERFORMANCE DEFINES {brand_name.upper()}'S CURRENT POSITION",
-                "bullets": [
-                    f"{brand_name} is positioned below premium lifestyle brands while offering similar functional benefits.",
-                    "Messaging reinforces value and practicality rather than exclusivity or status.",
-                    "This balance supports trial and volume but limits how premium the brand can feel today.",
-                ],
-                "insight": f"{brand_name}'s role in the market is defined by strong value and price-performance rather than by brand-led premium positioning.",
-            },
-            "channel_analysis": {
-                "title": "CHANNEL ANALYSIS",
-                "bullets": [
-                    "Primary distribution through e-commerce platforms.",
-                    "Brand website serves as a secondary channel.",
-                    "Social media presence supports awareness but not direct conversion.",
-                ],
-                "insight": "E-commerce has been a powerful engine for growth and customer trust.",
-            },
-            "brand_challenges": [
-                {
-                    "title": "BRAND STRUCTURE NEEDS CLARITY",
-                    "bullets": [
-                        "Current brand architecture lacks clear differentiation.",
-                        "Multiple product lines may confuse the market position.",
-                        "A clearer brand hierarchy would strengthen market presence.",
-                    ],
-                    "insight": "The brand structure creates both opportunity and risk for future growth.",
-                }
-            ],
-            "capabilities_summary": f"{brand_name} is an execution-driven brand with competitive products and strong market performance, now facing the need to clarify its naming and brand structure to support long-term growth.",
-        },
-        "competition": {
-            "market_overview": {
-                "title": "A MATURE, HIGHLY DEFINED MARKET",
-                "competitor_names": ["Competitor A", "Competitor B", "Competitor C"],
-                "insight": "These brands set clear standards for how the category should look, feel, and perform.",
-            },
-            "focused_competitors": ["Competitor A", "Competitor B"],
-            "competitor_analyses": [
-                {
-                    "name": "Competitor A",
-                    "positioning": [
-                        {"label": "Market leader", "detail": "Established brand with deep category credibility."},
-                        {"label": "Professional reliability", "detail": "Emphasizes consistency and quality."},
-                        {"label": "Broad line", "detail": "Multiple sub-lines for different needs."},
-                    ],
-                    "key_learnings": [
-                        {"label": "Authority builds confidence", "detail": "Longevity and focus signal trust."},
-                        {"label": "Consistency drives loyalty", "detail": "Reliable quality supports repeat purchase."},
-                        {"label": "Complexity can dilute clarity", "detail": "Wide portfolios can weaken brand idea."},
-                    ],
-                }
-            ],
-            "competition_summary": "The market is defined by a few clear roles — premium lifestyle, professional authority, and value play. The white space opportunity lies at the intersection of quality and accessibility, where no single brand has established clear ownership.",
-            "competitive_summary": {
-                "market_roles": ["Value Play", "Premium Lifestyle", "Professional Authority"],
-                "white_space": "Opportunity exists in the intersection of quality and accessibility.",
-                "category_norms": ["Performance claims", "Professional endorsement", "Value messaging"],
-            },
-        },
-        "consumer": {
-            "overview": "The target consumer values quality and practicality.",
-            "segments": [
-                {
-                    "name": "Practical Professionals",
-                    "description": "Value function and durability above brand status.",
-                    "needs": ["Reliable quality", "Fair pricing"],
-                    "behaviors": ["Research online before buying", "Read reviews carefully"],
-                }
-            ],
-            "key_insights": [
-                {
-                    "title": "CONSUMER INSIGHT HEADLINE",
-                    "bullets": [
-                        "Key finding about consumer behavior.",
-                        "Evidence from market data.",
-                        "Implication for brand strategy.",
-                    ],
-                    "insight": "Understanding these patterns is critical for positioning decisions.",
-                }
-            ],
-        },
+        "capabilities": capabilities,
         "next_steps": [
-            "Define clear brand architecture and naming strategy.",
-            "Develop positioning that balances value with aspiration.",
-            "Build evidence-based consumer segmentation for targeting.",
+            "Define a clear brand narrative and origin story that goes beyond functional benefits.",
+            "Clarify brand architecture — establish the relationship between parent brand and product lines.",
+            "Develop emotional positioning that complements existing functional strengths.",
+            "Audit visual identity consistency across Amazon, website, and social channels.",
         ],
     }
+
+    if phase == "brand_reality":
+        return result
+
+    # Add competition for market_structure and full
+    result["competition"] = {
+        "market_overview": {
+            "title": "A MATURE, WELL-ESTABLISHED MEDICAL APPAREL MARKET",
+            "competitor_names": ["FIGS", "Cherokee", "Carhartt", "Med Couture", "Healing Hands", "Dickies", "Jaanuu", "Barco", "WonderWink", "Dagacci"],
+            "bullets": [
+                f"The medical scrubs market has evolved from purely functional uniforms to a lifestyle-adjacent category, with total US market size exceeding $10B. Clear market roles have emerged: premium lifestyle (FIGS), heritage authority (Cherokee, Dickies), fashion-forward (Med Couture, Jaanuu), and value accessibility (Amazon generics).",
+                "Key dynamics shaping competition include the shift from wholesale to DTC, the rise of Amazon as a discovery and purchase channel, growing demand for modern fits (jogger pants, athletic silhouettes), and increasing consumer willingness to pay for quality — 88%+ of scrubs buyers agree they'd pay more for products that deliver on what matters to them.",
+                f"Most successful competitors have established clear, differentiated positioning — they own a specific role in the consumer's mind. {bn} has not yet claimed a distinct role, competing instead on features and price in a space where brand identity drives long-term loyalty and premium pricing.",
+            ],
+            "insight": "The most successful brands in this market win by owning a clear role — not by trying to be everything to everyone.",
+        },
+        "focused_competitors": ["FIGS", "Cherokee", "Carhartt", "Med Couture", "Healing Hands", "Jaanuu"],
+        "competitor_analyses": [
+            {
+                "name": "FIGS",
+                "banner_description": "The premium lifestyle pioneer that proved scrubs buyers will pay for brand",
+                "positioning": [
+                    {"label": "Target Audience", "detail": "Young healthcare professionals (25-40) who see scrubs as a lifestyle statement and professional identity marker. Skews female, urban, social-media-engaged."},
+                    {"label": "Price Point", "detail": "$38-$90 per piece, firmly premium. Pricing is a feature, not a barrier — it signals quality and exclusivity."},
+                    {"label": "Key Differentiator", "detail": "Created the 'fashion-forward medical apparel' category. Strong DTC brand with aspirational imagery, founder story, and community engagement."},
+                ],
+                "key_learnings": [
+                    {"label": "Brand-led growth works", "detail": "FIGS proved that scrubs buyers will pay premium for brand, not just function. Their success validates the opportunity for brand building in this category."},
+                    {"label": "Ambassador model scales", "detail": "Healthcare influencer program drives significant new customer acquisition. Community building creates switching costs that features alone cannot."},
+                    {"label": "Vulnerability: premium fatigue", "detail": "Economic pressure is pushing some FIGS buyers to seek similar quality at lower prices. The 'FIGS quality at accessible prices' territory is open."},
+                ],
+            },
+            {
+                "name": "Cherokee",
+                "banner_description": "The heritage authority — decades of trust, slow to modernize",
+                "positioning": [
+                    {"label": "Target Audience", "detail": "Broad healthcare workforce, value-conscious buyers who prioritize reliability and wide availability. Skews older, less brand-sensitive."},
+                    {"label": "Price Point", "detail": "$18-$45 per piece, accessible mid-market. Frequent promotions through uniform retailers."},
+                    {"label": "Key Differentiator", "detail": "Heritage brand with decades of category credibility (84% brand awareness) and the widest distribution network in the category."},
+                ],
+                "key_learnings": [
+                    {"label": "Trust through longevity", "detail": "Brand recognition built over decades creates a baseline of credibility that newer brands cannot easily replicate. But trust can also be borrowed through product quality and social proof."},
+                    {"label": "Distribution depth", "detail": "Available everywhere — Amazon, Walmart, specialty stores, hospital gift shops. But brand experience is inconsistent across channels, diluting the brand."},
+                    {"label": "Slow to modernize", "detail": "Website and social presence lag behind newer DTC competitors. Product design has evolved but brand communication still feels dated. Vulnerable to modern challengers."},
+                ],
+            },
+            {
+                "name": "Carhartt",
+                "banner_description": "The durability icon crossing from workwear into healthcare",
+                "positioning": [
+                    {"label": "Target Audience", "detail": "Healthcare workers who identify with 'hard work' culture. Strong appeal to male buyers and those in physically demanding roles."},
+                    {"label": "Price Point", "detail": "$25-$55 per piece, mid-market to slightly premium. Pricing reflects workwear heritage brand equity."},
+                    {"label": "Key Differentiator", "detail": "Leverages iconic workwear brand identity and 'built to last' credibility. The Carhartt name carries durability associations that transfer directly to scrubs."},
+                ],
+                "key_learnings": [
+                    {"label": "Brand transfer works", "detail": "Carhartt proved that a strong brand identity from an adjacent category can create instant credibility in medical apparel. The 'tough enough for your shift' positioning resonates."},
+                    {"label": "Limited healthcare depth", "detail": "Product range is narrower than pure-play scrubs brands. Scrubs are a category extension, not the core business — which limits innovation and responsiveness."},
+                    {"label": "Gender gap", "detail": "Brand identity skews masculine, which limits appeal to the 70% female scrubs market. An opportunity for brands that can own durability AND inclusive fit."},
+                ],
+            },
+            {
+                "name": "Med Couture",
+                "banner_description": "Fashion-forward scrubs with modern fits and bold patterns",
+                "positioning": [
+                    {"label": "Target Audience", "detail": "Style-conscious healthcare professionals who want scrubs that look good, not just perform. Younger, trend-aware, predominantly female."},
+                    {"label": "Price Point", "detail": "$30-$55 per piece, mid-to-premium. Pricing reflects design and fabric quality."},
+                    {"label": "Key Differentiator", "detail": "Strongest fashion-forward positioning in the category. Bold prints, modern silhouettes, and trend-responsive collections set them apart from functional-first competitors."},
+                ],
+                "key_learnings": [
+                    {"label": "Style drives loyalty", "detail": "Med Couture shows that a segment of buyers will choose scrubs based on style as much as function. Their repeat purchase rate suggests style creates stronger loyalty than features."},
+                    {"label": "Niche positioning limits scale", "detail": "Fashion-forward positioning appeals strongly to a specific segment but limits mass-market growth. The brand struggles to appeal to performance-first or value-first buyers."},
+                    {"label": "Pattern over platform", "detail": "Med Couture innovates on pattern and color, not on fabric technology or fit engineering. This creates an opportunity for brands that can offer style AND substance."},
+                ],
+            },
+        ],
+        "landscape_summary": {
+            "market_roles": [
+                {"role": "Premium Lifestyle", "brands": ["FIGS", "Jaanuu"], "description": "Brand-led, DTC-focused, aspirational positioning. Commands highest prices and strongest emotional loyalty."},
+                {"role": "Heritage Authority", "brands": ["Cherokee", "Dickies"], "description": "Decades of category credibility, wide distribution, trusted but not modern. Wins on familiarity and availability."},
+                {"role": "Performance Crossover", "brands": ["Carhartt"], "description": "Leverages brand equity from adjacent categories. Strong on durability perception, limited on healthcare-specific innovation."},
+                {"role": "Fashion-Forward", "brands": ["Med Couture", "Healing Hands"], "description": "Style-first positioning with modern fits and bold patterns. Appeals to aesthetically driven buyers."},
+            ],
+            "white_space": f"Quality + authenticity at an accessible price — no brand currently owns 'real healthcare worker performance' positioning with premium product execution. {bn}'s product fundamentals could fill this gap if supported by a clear brand story.",
+            "category_norms": [
+                "Comfort/stretch claims are table stakes — every brand now offers 4-way stretch",
+                "Color variety is expected (20+ colors) and growing",
+                "Pocket count and design are key feature differentiators on Amazon",
+                "Review volume and rating drive Amazon conversion and discovery",
+            ],
+        },
+        "competition_summary": (
+            f"The scrubs market is well-established, with leading brands succeeding by owning a clear and focused role — "
+            "such as lifestyle identity, medical authority, durability, value, style, or comfort — rather than trying to "
+            f"compete across everything at once. The white space for {bn} lies at the intersection of premium product "
+            "performance and accessible, authentic positioning: a brand that earns trust through product excellence rather "
+            "than lifestyle aspiration or heritage credibility. Claiming this territory requires a clear brand strategy, "
+            "a defined target audience, and consistent execution across channels."
+        ),
+    }
+
+    if phase == "market_structure":
+        return result
+
+    # Add consumer for full
+    result["consumer"] = {
+        "overview": "Healthcare professionals who purchase their own scrubs represent a diverse but segmentable market. Primarily female (70%), Millennial-dominated (55%), and increasingly willing to invest in quality scrubs — 88% agree they'd pay more for scrubs that clearly deliver on what matters to them.",
+        "research_approach": [
+            {"label": "Format", "detail": "Review analysis + e-commerce data mining + secondary research"},
+            {"label": "Data Sources", "detail": "Amazon reviews, brand website content, competitor listings, industry reports"},
+            {"label": "Participants", "detail": "Healthcare professionals: nurses, medical assistants, technicians, physicians; primary/shared purchase decision-makers"},
+            {"label": "Analysis", "detail": "Sentiment analysis, theme extraction, behavioral clustering, competitive benchmarking"},
+            {"label": "Timing", "detail": "APRIL 2026"},
+        ],
+        "charts": [
+            {
+                "chart_type": "dual",
+                "title": "SCRUBS SHOPPING HABITS",
+                "subtitle": "Based on review analysis and e-commerce data",
+                "left_title": "Purchase frequency patterns\n(inferred from review timing)",
+                "left_categories": ["Monthly or more", "Every 2-3 months", "2-3 times per year", "Once per year", "Only when items wear out"],
+                "left_values": [18, 42, 27, 6, 6],
+                "left_type": "donut",
+                "right_title": "Primary purchase channels\n(based on review sources)",
+                "right_categories": ["Amazon", "Specialty uniform stores", "Walmart", "Brand websites (DTC)", "Target", "Employer-provided"],
+                "right_values": [59, 51, 51, 41, 26, 25],
+                "right_type": "hbar",
+            },
+            {
+                "chart_type": "hbar",
+                "title": "WHAT MATTERS MOST IN SCRUBS",
+                "subtitle": "Based on review theme frequency analysis",
+                "question": "Top purchase drivers by review mention frequency",
+                "categories": ["All-day comfort", "Stretch and flexibility", "Durability after repeated washing", "Breathability / moisture-wicking", "Easy care (wrinkle-resistant, quick-dry)", "Smart storage solutions (pockets)", "Fluid resistance", "Soft hand feel", "Consistent sizing"],
+                "values": [61, 42, 40, 28, 27, 23, 18, 17, 15],
+            },
+            {
+                "chart_type": "hbar",
+                "title": "BRAND AWARENESS AND CONSIDERATION",
+                "subtitle": "Based on cross-shopping mentions in reviews",
+                "question": "Brands most frequently mentioned or compared",
+                "categories": ["Dickies", "Cherokee", "Carhartt", "FIGS", "Med Couture", "Healing Hands", "Jaanuu", "Barco", "WonderWink"],
+                "values": [84, 65, 58, 39, 42, 28, 16, 14, 12],
+            },
+        ],
+        "verbatim_quotes": [
+            {
+                "theme": "Comfort & Durability",
+                "quotes": [
+                    "I need the right kind of comfort to last all shift",
+                    "They don't last long, not durable",
+                    "The material changes over time washing them",
+                ],
+            },
+            {
+                "theme": "Fit & Sizing",
+                "quotes": [
+                    "Sizing doesn't always fit — I have to get medium bottoms and large tops",
+                    "I wish they scrubs were more durable with colors lasting longer",
+                    "The drawstring tie on most pants is unusable",
+                ],
+            },
+            {
+                "theme": "Value & Price",
+                "quotes": [
+                    "I think that they should be more affordable regardless of quality",
+                    "The cost is a bit high for the quality",
+                    "Don't mind paying more for a durable, fashionable sharp looking professional scrub",
+                ],
+            },
+        ],
+        "segments": [
+            {
+                "name": "Endurance First",
+                "tagline": "I want scrubs that perform as hard as I do",
+                "size_pct": 27,
+                "narrative": (
+                    f"Meet the Endurance First buyer: a Nurse Practitioner or Physician Assistant pulling 10-12 hour shifts "
+                    "in a hospital environment, where every piece of clothing is tested by constant movement, fluid exposure, "
+                    "and repeated washing. This segment (73% under 45, 36% household income over $100K) views scrubs as "
+                    "essential performance equipment — not uniforms, not fashion. They spend the most annually ($393 median) "
+                    "and buy every 2-3 months, driven by replacement cycles rather than impulse. What matters: durability that "
+                    "survives 100+ wash cycles, stretch that doesn't lose shape, and comfort that holds up from hour 1 to hour 12. "
+                    "They research heavily on Amazon (27% default to Amazon for speed and reviews) and are willing to pay more — "
+                    "58% strongly agree they'd pay more for scrubs that deliver. Their frustration: too many brands promise "
+                    "performance but can't survive the reality of a demanding healthcare shift."
+                ),
+                "demographics": {
+                    "primary_role": "Nurse Practitioner (NP) / Physician Assistant (PA)",
+                    "age_skew": "73% under 45 — predominantly Millennial with significant Gen X presence",
+                    "income": "36% household income over $100K — highest earning segment",
+                    "gender_split": "65% female, 35% male",
+                },
+                "shopping_behavior": {
+                    "annual_spend": "$393 median — highest of all segments",
+                    "primary_channel": "Amazon (27%) and brand websites (20%) — product-dependent shoppers (38%)",
+                    "purchase_frequency": "71% buy every 2-3 months or more — highest frequency",
+                    "brand_loyalty": "Medium — loyal to performance, not brand name. Will switch if quality drops.",
+                },
+                "top_needs": ["Longer-lasting durability (51%)", "Better fabric performance (49%)", "More consistent fit (40%)"],
+                "pain_points": ["Inconsistent sizing between brands (35%)", "Scrubs lose shape over time (29%)", "Insufficient pockets (24%)"],
+                "what_premium_means": "Evidence of superior fabric technology (42%), professional brand name (27%), and endorsements from medical professionals (24%). Premium = proof of performance.",
+                "lifestyle_signals": [
+                    {"category": "Social Media", "detail": "78% use YouTube more than any other social media platform"},
+                    {"category": "Music Preference", "detail": "45% like Rock music with 41% who like Hip-Hop/Rap"},
+                    {"category": "Wishlist", "detail": "Better fit & sizing as well as fabric quality & durability"},
+                ],
+            },
+            {
+                "name": "Fit Focused",
+                "tagline": "I want scrubs that look as good as they feel",
+                "size_pct": 25,
+                "narrative": (
+                    "Meet the Fit Focused buyer: a Medical Assistant or Technician in her late 20s to early 30s, scrolling "
+                    "through scrubs on her phone between patients, looking for that perfect combination of professional fit "
+                    "and personal style. This segment (45% under 45, primarily Millennial) cares deeply about how scrubs look "
+                    "AND feel — they want modern silhouettes, flattering cuts, and colors that express personality while "
+                    "maintaining professionalism. At $245 median annual spend, they're price-conscious but willing to invest "
+                    "in the right piece. Their biggest frustration: length issues (41%) and inconsistent sizing (25%) turn "
+                    "online shopping into a gamble. They want longer-lasting durability (75%) and better fabric performance (45%), "
+                    "but they won't sacrifice fit for function. If a brand can solve the sizing problem AND deliver on style, "
+                    "this segment becomes fiercely loyal."
+                ),
+                "demographics": {
+                    "primary_role": "Medical Assistant / Technician",
+                    "age_skew": "45% under 45 — more evenly distributed across generations",
+                    "income": "31% household income over $100K",
+                    "gender_split": "70% female, 30% male",
+                },
+                "shopping_behavior": {
+                    "annual_spend": "$245 median — lowest of active segments",
+                    "primary_channel": "Amazon (33%) but also brand websites (16%) and value-seeking (25%)",
+                    "purchase_frequency": "51% buy every 2-3 months or less — more deliberate purchases",
+                    "brand_loyalty": "High once they find the right fit — switching cost is the hassle of re-sizing",
+                },
+                "top_needs": ["All-day comfort (57%)", "Durability after repeated washing (55%)", "Stretch and flexibility (33%)"],
+                "pain_points": ["Length issues — too short or too long (41%)", "Insufficient pocket space (25%)", "Inconsistent sizing between brands (25%)"],
+                "what_premium_means": "High-end modern design with flattering cuts (31%), superior fabric technology (41%), and a dedicated website beyond Amazon (24%). Premium = looking professional AND feeling good.",
+                "lifestyle_signals": [
+                    {"category": "Social Media", "detail": "YouTube is the dominant platform with strong Instagram usage"},
+                    {"category": "Style Identity", "detail": "Values modern, flattering silhouettes that maintain professionalism"},
+                    {"category": "Wishlist", "detail": "Better fit & sizing is the #1 priority, followed by fabric quality"},
+                ],
+            },
+            {
+                "name": "Value Hunter",
+                "tagline": "I want the best quality I can get for the price",
+                "size_pct": 21,
+                "narrative": (
+                    "Meet the Value Hunter: a Registered Nurse with her shopping cart open, calculator in hand, comparing "
+                    "prices across three websites. She's not cheap, she's strategic. This segment (58% Millennial, split between "
+                    "married and single) earns mostly upper-middle income (51%) with 30% low-middle. At $294 spent annually, they "
+                    "demand the best quality for every dollar. They shop Amazon (63%), specialty uniform stores (50%), and brand "
+                    "websites (44%) hunting for deals. 'Premium' must prove itself: superior fabric technology (40%) and a "
+                    "professional brand experience beyond Amazon (30%). Their biggest headache: inconsistent sizing (40%) turns "
+                    "online shopping into a gamble. They want brands to deliver fair value and stop forcing them to choose "
+                    "between budget and scrubs that actually work."
+                ),
+                "demographics": {
+                    "primary_role": "Medical Assistant / Technician (44%), Registered Nurse (28%)",
+                    "age_skew": "58% Millennial, 23% Gen X — core working-age",
+                    "income": "51% upper-middle income, 30% low-middle",
+                    "gender_split": "67% female, 33% male",
+                },
+                "shopping_behavior": {
+                    "annual_spend": "$294 median",
+                    "primary_channel": "Amazon (63%) and specialty stores (50%) — comparison shoppers (37% choose best value)",
+                    "purchase_frequency": "63% buy every 2-3 months or more",
+                    "brand_loyalty": "Low — loyalty goes to value, not brand name. Will switch for a better deal.",
+                },
+                "top_needs": ["All-day comfort (72%)", "Stretch and flexibility (44%)", "Durability after repeated washing (35%)"],
+                "pain_points": ["Inconsistent sizing between brands (40%)", "Scrubs lose shape over time (26%)", "Tightness in hips or thighs (26%)"],
+                "what_premium_means": "Evidence of superior fabric technology (40%), a dedicated website with professional brand experience beyond Amazon (30%), higher pricing that signals quality (26%). Premium = proven performance at fair price.",
+                "lifestyle_signals": [
+                    {"category": "Social Media", "detail": "88% use Facebook more than any other social media platform"},
+                    {"category": "Music Preference", "detail": "53% prefer Hip-Hop/Rap with 51% who like R&B/Soul"},
+                    {"category": "Wishlist", "detail": "Better price / affordability and better fit & sizing"},
+                ],
+            },
+            {
+                "name": "Polished Pro",
+                "tagline": "I want scrubs that make me look polished and confident",
+                "size_pct": 18,
+                "narrative": (
+                    "Meet the Polished Pro: a physician adjusting her scrubs before rounds, ensuring every detail projects "
+                    "confidence. Appearance isn't vanity, it's professional presence. This segment (53% Millennial, 64% married) "
+                    "is the highest earner with 47% high income, 31% upper-middle. At $294 spent annually, they invest in scrubs "
+                    "that look as capable as they are. The most clinically advanced segment (42% RNs, 19% Medical Assistants, "
+                    "14% Physicians/Surgeons). Image-conscious and quality-driven: Amazon (64%), specialty stores (61%), Walmart (47%). "
+                    "'Premium' means superior fabric technology (39%) plus high-end, modern design with flattering cuts (36%). "
+                    "81% use Instagram more than any other segment — they're visually engaged and style-aware. They'll pay premium "
+                    "but only if scrubs deliver both professionalism and performance."
+                ),
+                "demographics": {
+                    "primary_role": "Registered Nurse (42%), Medical Assistant (19%), Physician/Surgeon (14%)",
+                    "age_skew": "53% Millennial, 25% Gen X, 17% Gen Z",
+                    "income": "47% high income, 31% upper-middle — highest income segment",
+                    "gender_split": "69% female, 31% male",
+                },
+                "shopping_behavior": {
+                    "annual_spend": "$294 median",
+                    "primary_channel": "Amazon (64%) and specialty stores (61%), brand websites (33%) — highest DTC affinity",
+                    "purchase_frequency": "61% buy every 2-3 months or more",
+                    "brand_loyalty": "High — invest in brands that reflect their professional image. Highest brand awareness overall.",
+                },
+                "top_needs": ["All-day comfort (50%)", "Stretch and flexibility (50%)", "Durability after repeated washing (39%)"],
+                "pain_points": ["Inconsistent sizing between brands (40%)", "Scrubs lose shape over time (26%)", "Tightness in hips or thighs (26%)"],
+                "what_premium_means": "Superior fabric technology (39%), high-end modern design with flattering cuts (36%), dedicated website with professional brand experience (31%), sustainable materials (33% — highest of any segment). Premium = looking sharp AND performing well.",
+                "lifestyle_signals": [
+                    {"category": "Social Media", "detail": "81% use Instagram more than any other segment — visually engaged and style-aware"},
+                    {"category": "Style Identity", "detail": "Professional, polished appearance is central to identity"},
+                    {"category": "Wishlist", "detail": "Better fit & sizing as well as fabric quality & durability"},
+                ],
+            },
+            {
+                "name": "Basic Buyer",
+                "tagline": "I just need scrubs that work",
+                "size_pct": 8,
+                "narrative": (
+                    "Meet the Basic Buyer: a healthcare worker who views scrubs as a necessary uniform, not a category worth "
+                    "investing thought or money into. This smallest segment treats scrubs as purely functional — whatever is cheapest, "
+                    "most available, and good enough will do. They buy infrequently, spend the least, and have minimal brand awareness "
+                    "or loyalty. They are not a viable target for any brand seeking to build premium positioning, but they represent "
+                    "the floor of the market and help define what 'commodity scrubs' looks like — the position every brand should "
+                    "want to avoid."
+                ),
+                "demographics": {
+                    "primary_role": "Mixed — various entry-level healthcare roles",
+                    "age_skew": "Broadly distributed across generations",
+                    "income": "Predominantly low to low-middle income",
+                    "gender_split": "60% female, 40% male",
+                },
+                "shopping_behavior": {
+                    "annual_spend": "Under $150 median — lowest of all segments",
+                    "primary_channel": "Walmart and employer-provided — convenience-driven",
+                    "purchase_frequency": "Only when items wear out",
+                    "brand_loyalty": "None — purely price and availability driven",
+                },
+                "top_needs": ["Low price", "Availability", "Basic comfort"],
+                "pain_points": ["Having to buy scrubs at all", "Price of quality scrubs"],
+                "what_premium_means": "Not relevant — this segment does not engage with premium concepts",
+                "lifestyle_signals": [],
+            },
+        ],
+        "target_recommendation": {
+            "primary_segment": "Endurance First",
+            "title": "PRIMARY TARGET: ENDURANCE FIRST PROFESSIONALS",
+            "rationale_bullets": [
+                f"Defines quality: If scrubs perform for the most demanding shifts, they earn trust across the market. Endurance First professionals set the performance standard for the category — winning them validates the product for everyone else.",
+                f"Highest value: Spend $393 annually (highest of all segments) and 58% strongly agree they'd pay more for scrubs that deliver. They are willing to invest in proven performance.",
+                f"Strong product fit: Their unmet needs — durability, fabric performance, consistent fit — align directly with {bn}'s execution strengths. The product already delivers what they want; the brand just needs to communicate it.",
+                f"Natural channel fit: Already research and shop heavily on Amazon (27% default channel), where {bn} has established traction. The path to reach them is already built.",
+            ],
+            "insight": "For this segment, 'premium' means proof that the product works — not image or prestige. This is a credibility path, not a lifestyle play.",
+            "enables": [
+                "A clear decision filter for product performance and quality standards",
+                f"A credible path to brand elevation without lifestyle positioning or premium pricing",
+                "Natural spillover to adjacent segments who value durability and fit",
+            ],
+            "does_not_decide": [
+                "Final brand positioning or tone",
+                f"The future role of {bn}'s current brand name versus a new brand",
+                "Pricing architecture or promotional strategy",
+            ],
+        },
+        "consumer_summary": (
+            "Endurance First professionals spend the most, set the highest performance standards, and define what quality "
+            "means in scrubs — making them the most valuable and influential segment in the market. Their needs align directly "
+            f"with {bn}'s product strengths, and their channel behavior matches {bn}'s established Amazon presence. Building on "
+            "these insights, the next step is to define a clear and differentiated brand position that resonates with this segment's "
+            "performance-first mindset and scales credibly across the broader market."
+        ),
+        "key_insights": [
+            {
+                "title": "KEY CONSUMER INSIGHTS",
+                "bullets": [
+                    "Comfort is the #1 purchase driver across all segments (50-72%), far ahead of brand name — functional excellence is the entry ticket. No brand can win on aspiration alone without delivering on comfort and durability first.",
+                    "Amazon dominates as a purchase channel (59-64% across segments), but DTC brand websites show strong traction (16-33%) — consumers are open to buying direct, especially Polished Pro (33%) and Endurance First (20%) segments.",
+                    "88% of scrubs buyers agree or strongly agree they'd pay more for scrubs that clearly deliver on what matters to them. The willingness to pay is there — what's missing is a brand that gives them a clear reason to believe.",
+                    "Inconsistent sizing is the #1 frustration across ALL segments (35-40%). Any brand that can solve the sizing problem credibly will remove the biggest barrier to loyalty and repeat purchase.",
+                ],
+                "insight": "There is a clear opportunity to win on proven performance without competing on brand heritage or lifestyle aspiration — the consumer is willing to pay, they just need a reason to believe.",
+            },
+        ],
+    }
+
+    # Add summary & next steps for full report
+    result["summary_and_next_steps"] = {
+        "capabilities_column": (
+            f"{bn} is an execution-driven brand with competitive products and strong Amazon performance, "
+            "now facing the need to clarify its naming and brand structure — including the role of its "
+            "current brand name — to support long-term growth."
+        ),
+        "competition_column": (
+            "The scrubs market is well-established, with leading brands succeeding by owning a clear and "
+            "focused role — such as lifestyle identity, medical authority, durability, value, style, or "
+            "comfort — rather than trying to compete across everything at once."
+        ),
+        "consumer_column": (
+            "Endurance First professionals spend the most, set the highest performance standards, and define "
+            "what quality means in scrubs — making them the most valuable and influential segment in the market."
+        ),
+        "closing_insight": (
+            f"Building on these insights, we will define a clear and differentiated brand position for {bn} — "
+            "one that resonates with its most demanding customers and scales credibly across the broader market."
+        ),
+    }
+
+    return result

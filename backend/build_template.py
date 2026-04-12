@@ -425,6 +425,61 @@ def build_summary_slide(prs, title="SUMMARY", text="", has_image=True):
     return slide
 
 
+def build_claims_vs_perception(prs, brand_claims=None, customer_perception=None,
+                                alignment="", gaps=""):
+    """Two-column comparison: Brand Claims vs. Customer Perception."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    # Title
+    add_text(slide, Inches(0.6), Inches(0.4), Inches(10), Inches(0.55),
+             "BRAND CLAIMS VS. CUSTOMER PERCEPTION", Pt(20), ORANGE, bold=True)
+
+    # Left column header
+    add_rect(slide, Inches(0.6), Inches(1.3), Inches(5.5), Inches(0.5), ORANGE)
+    add_text(slide, Inches(0.8), Inches(1.33), Inches(5), Inches(0.45),
+             "What the Brand Says", Pt(14), WHITE, bold=True)
+
+    # Right column header
+    add_rect(slide, Inches(6.8), Inches(1.3), Inches(5.5), Inches(0.5), DARK)
+    add_text(slide, Inches(7.0), Inches(1.33), Inches(5), Inches(0.45),
+             "What Customers Say", Pt(14), WHITE, bold=True)
+
+    # Left column bullets
+    y_left = Inches(2.1)
+    for claim in (brand_claims or []):
+        add_text(slide, Inches(0.8), y_left, Inches(5.2), Inches(0.6),
+                 f"\u2022  {claim}", Pt(12), DARK, line_spacing=18)
+        y_left += Inches(0.65)
+
+    # Right column bullets
+    y_right = Inches(2.1)
+    for perception in (customer_perception or []):
+        add_text(slide, Inches(7.0), y_right, Inches(5.2), Inches(0.6),
+                 f"\u2022  {perception}", Pt(12), DARK, line_spacing=18)
+        y_right += Inches(0.65)
+
+    # Alignment & Gaps section at bottom
+    bottom_y = max(y_left, y_right) + Inches(0.3)
+    if bottom_y > Inches(5.5):
+        bottom_y = Inches(5.5)
+
+    # Alignment box
+    add_rect(slide, Inches(0.6), bottom_y, Inches(11.7), Inches(0.04), GRAY_LIGHT)
+    bottom_y += Inches(0.25)
+
+    if alignment:
+        add_text(slide, Inches(0.6), bottom_y, Inches(11.7), Inches(0.5),
+                 f"Alignment:  {alignment}", Pt(11), GRAY_TEXT,
+                 italic=True, line_spacing=16)
+        bottom_y += Inches(0.55)
+
+    if gaps:
+        add_text(slide, Inches(0.6), bottom_y, Inches(11.7), Inches(0.7),
+                 f"Gap:  {gaps}", Pt(11), BLUE, italic=True, line_spacing=16)
+
+    return slide
+
+
 def build_research_approach(prs, rows=None):
     """Research approach: dark bg + labeled rows."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])

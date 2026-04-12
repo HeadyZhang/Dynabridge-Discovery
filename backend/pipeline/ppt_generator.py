@@ -15,7 +15,8 @@ from build_template import (
     SLIDE_W, SLIDE_H,
     build_cover, build_agenda, build_approach, build_step_divider,
     build_section_header, build_insight_slide, build_competitor_slide,
-    build_summary_slide, build_research_approach, build_subsection_divider,
+    build_summary_slide, build_claims_vs_perception,
+    build_research_approach, build_subsection_divider,
     build_bar_chart_slide, build_donut_chart_slide, build_dual_chart_slide,
     build_next_steps, build_thank_you,
 )
@@ -26,6 +27,7 @@ async def generate_pptx(
     project_id: int,
     analysis: dict,
     brand_name: str,
+    phase: str = "full",
 ) -> tuple[Path, list[dict]]:
     """Generate a Brand Discovery PPTX from analysis data.
 
@@ -63,7 +65,7 @@ async def generate_pptx(
     cap = analysis.get("capabilities", {})
 
     # Insight slides for each capabilities section
-    for key in ["execution_summary", "product_offer", "pricing_position", "channel_analysis"]:
+    for key in ["execution_summary", "product_offer", "product_fundamentals", "pricing_position", "channel_analysis"]:
         section = cap.get(key)
         if section:
             build_insight_slide(prs,
@@ -89,93 +91,106 @@ async def generate_pptx(
         build_summary_slide(prs, "CAPABILITIES SUMMARY", cap_summary)
         slide_meta.append({"type": "summary", "content": {"text": cap_summary}})
 
-    # ── Competition ───────────────────────────────────────────
-
-    build_section_header(prs, "A closer look at the\ncompetition", "competition")
-    slide_meta.append({"type": "section", "content": {"section": "competition"}})
-
-    comp = analysis.get("competition", {})
-
-    # Market overview
-    overview = comp.get("market_overview", {})
-    if overview:
-        build_insight_slide(prs,
-            title=overview.get("title", "COMPETITIVE LANDSCAPE"),
-            bullets=overview.get("bullets", []),
-            insight_text=overview.get("insight", ""),
+    # Claims vs. Perception
+    cvp = cap.get("claims_vs_perception", {})
+    if cvp and (cvp.get("brand_claims") or cvp.get("customer_perception")):
+        build_claims_vs_perception(prs,
+            brand_claims=cvp.get("brand_claims", []),
+            customer_perception=cvp.get("customer_perception", []),
+            alignment=cvp.get("alignment", ""),
+            gaps=cvp.get("gaps", ""),
         )
-        slide_meta.append({"type": "insight", "content": overview})
+        slide_meta.append({"type": "claims_vs_perception", "content": cvp})
 
-    # Competitor analysis slides
-    for competitor in comp.get("competitor_analyses", []):
-        build_competitor_slide(prs,
-            name=competitor.get("name", "Competitor"),
-            positioning=[(p["label"], p["detail"]) for p in competitor.get("positioning", [])],
-            key_learnings=[(k["label"], k["detail"]) for k in competitor.get("key_learnings", [])],
-        )
-        slide_meta.append({"type": "competitor", "content": competitor})
+    # ── Competition (Phase 2+) ───────────────────────────────
 
-    # Competition summary
-    comp_summary = comp.get("competition_summary", "")
-    if comp_summary:
-        build_summary_slide(prs, "COMPETITION SUMMARY", comp_summary)
-        slide_meta.append({"type": "summary", "content": {"text": comp_summary}})
+    if phase in ("market_structure", "full") and analysis.get("competition"):
+        build_section_header(prs, "A closer look at the\ncompetition", "competition")
+        slide_meta.append({"type": "section", "content": {"section": "competition"}})
 
-    # ── Consumer ──────────────────────────────────────────────
+        comp = analysis.get("competition", {})
 
-    build_section_header(prs, "A closer look at the\nconsumer", "consumer")
-    slide_meta.append({"type": "section", "content": {"section": "consumer"}})
-
-    consumer = analysis.get("consumer", {})
-
-    # Research approach
-    research = consumer.get("research_approach")
-    if research:
-        build_research_approach(prs,
-            [(r["label"], r["detail"]) for r in research])
-        slide_meta.append({"type": "research", "content": {"rows": research}})
-
-    # Demographics sub-section
-    demographics = consumer.get("demographics", {})
-    if demographics:
-        build_subsection_divider(prs, "Demographics &\nBackground")
-        slide_meta.append({"type": "subsection", "content": {"title": "Demographics"}})
-
-    # Chart slides
-    for chart in consumer.get("charts", []):
-        chart_type = chart.get("chart_type", "hbar")
-        if chart_type == "dual":
-            build_dual_chart_slide(prs,
-                title=chart.get("title", ""),
-                subtitle_text=chart.get("subtitle", None),
-                left_title=chart.get("left_title", ""),
-                left_categories=chart.get("left_categories"),
-                left_values=chart.get("left_values"),
-                right_title=chart.get("right_title", ""),
-                right_categories=chart.get("right_categories"),
-                right_values=chart.get("right_values"),
-                left_type=chart.get("left_type", "donut"),
-                right_type=chart.get("right_type", "hbar"),
+        # Market overview
+        overview = comp.get("market_overview", {})
+        if overview:
+            build_insight_slide(prs,
+                title=overview.get("title", "COMPETITIVE LANDSCAPE"),
+                bullets=overview.get("bullets", []),
+                insight_text=overview.get("insight", ""),
             )
-        elif chart_type in ("bar", "hbar"):
-            build_bar_chart_slide(prs,
-                title=chart.get("title", ""),
-                subtitle_text=chart.get("subtitle", None),
-                question=chart.get("question", ""),
-                categories=chart.get("categories"),
-                values=chart.get("values"),
-                is_horizontal=(chart_type == "hbar"),
-            )
-        slide_meta.append({"type": "chart", "content": chart})
+            slide_meta.append({"type": "insight", "content": overview})
 
-    # Consumer insights
-    for insight in consumer.get("key_insights", []):
-        build_insight_slide(prs,
-            title=insight.get("title", "KEY CONSUMER INSIGHTS"),
-            bullets=insight.get("bullets", []),
-            insight_text=insight.get("insight", ""),
-        )
-        slide_meta.append({"type": "insight", "content": insight})
+        # Competitor analysis slides
+        for competitor in comp.get("competitor_analyses", []):
+            build_competitor_slide(prs,
+                name=competitor.get("name", "Competitor"),
+                positioning=[(p["label"], p["detail"]) for p in competitor.get("positioning", [])],
+                key_learnings=[(k["label"], k["detail"]) for k in competitor.get("key_learnings", [])],
+            )
+            slide_meta.append({"type": "competitor", "content": competitor})
+
+        # Competition summary
+        comp_summary = comp.get("competition_summary", "")
+        if comp_summary:
+            build_summary_slide(prs, "COMPETITION SUMMARY", comp_summary)
+            slide_meta.append({"type": "summary", "content": {"text": comp_summary}})
+
+    # ── Consumer (Full only) ──────────────────────────────────
+
+    if phase == "full" and analysis.get("consumer"):
+        build_section_header(prs, "A closer look at the\nconsumer", "consumer")
+        slide_meta.append({"type": "section", "content": {"section": "consumer"}})
+
+        consumer = analysis.get("consumer", {})
+
+        # Research approach
+        research = consumer.get("research_approach")
+        if research:
+            build_research_approach(prs,
+                [(r["label"], r["detail"]) for r in research])
+            slide_meta.append({"type": "research", "content": {"rows": research}})
+
+        # Demographics sub-section
+        demographics = consumer.get("demographics", {})
+        if demographics:
+            build_subsection_divider(prs, "Demographics &\nBackground")
+            slide_meta.append({"type": "subsection", "content": {"title": "Demographics"}})
+
+        # Chart slides
+        for chart in consumer.get("charts", []):
+            chart_type = chart.get("chart_type", "hbar")
+            if chart_type == "dual":
+                build_dual_chart_slide(prs,
+                    title=chart.get("title", ""),
+                    subtitle_text=chart.get("subtitle", None),
+                    left_title=chart.get("left_title", ""),
+                    left_categories=chart.get("left_categories"),
+                    left_values=chart.get("left_values"),
+                    right_title=chart.get("right_title", ""),
+                    right_categories=chart.get("right_categories"),
+                    right_values=chart.get("right_values"),
+                    left_type=chart.get("left_type", "donut"),
+                    right_type=chart.get("right_type", "hbar"),
+                )
+            elif chart_type in ("bar", "hbar"):
+                build_bar_chart_slide(prs,
+                    title=chart.get("title", ""),
+                    subtitle_text=chart.get("subtitle", None),
+                    question=chart.get("question", ""),
+                    categories=chart.get("categories"),
+                    values=chart.get("values"),
+                    is_horizontal=(chart_type == "hbar"),
+                )
+            slide_meta.append({"type": "chart", "content": chart})
+
+        # Consumer insights
+        for insight in consumer.get("key_insights", []):
+            build_insight_slide(prs,
+                title=insight.get("title", "KEY CONSUMER INSIGHTS"),
+                bullets=insight.get("bullets", []),
+                insight_text=insight.get("insight", ""),
+            )
+            slide_meta.append({"type": "insight", "content": insight})
 
     # ── Next Steps ────────────────────────────────────────────
 

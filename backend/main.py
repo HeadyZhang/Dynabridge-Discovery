@@ -43,6 +43,7 @@ def create_project(
     brand_url: str = Form(""),
     competitor_urls: str = Form("[]"),
     language: str = Form("en"),
+    phase: str = Form("brand_reality"),
 ):
     with Session() as db:
         project = Project(
@@ -50,6 +51,7 @@ def create_project(
             brand_url=brand_url,
             competitor_urls=competitor_urls,
             language=language,
+            phase=phase,
         )
         db.add(project)
         db.commit()
@@ -97,8 +99,12 @@ async def upload_file(project_id: int, file: UploadFile = File(...)):
 # ─── Generate Pipeline ───────────────────────────────────────
 
 @app.post("/api/projects/{project_id}/generate")
-async def generate_report(project_id: int):
-    """Trigger the full generation pipeline. Returns SSE stream of progress."""
+async def generate_report(project_id: int, phase: str = Form("full")):
+    """Trigger the full generation pipeline. Returns SSE stream of progress.
+
+    Args:
+        phase: "brand_reality" | "market_structure" | "full"
+    """
 
     async def event_stream():
         with Session() as db:
@@ -106,6 +112,9 @@ async def generate_report(project_id: int):
             if not project:
                 yield _sse("error", {"message": "Project not found"})
                 return
+
+            # Save the phase to the project
+            project.phase = phase
 
             # Step 1: Scrape website
             yield _sse("progress", {"step": "scraping", "message": "Crawling brand website..."})
@@ -126,6 +135,61 @@ async def generate_report(project_id: int):
             parsed_docs = await parse_documents([f.file_path for f in files])
             yield _sse("progress", {"step": "parsing", "message": "Documents parsed", "done": True})
 
+            # Step 2b: E-commerce scraping
+            ecommerce_data = None
+            review_data = None
+            try:
+                yield _sse("progress", {"step": "ecommerce", "message": "Scraping e-commerce data..."})
+                from pipeline.ecommerce_scraper import scrape_ecommerce
+                ecommerce_data = await scrape_ecommerce(project.name)
+                yield _sse("progress", {"step": "ecommerce", "message": "E-commerce data collected", "done": True})
+            except Exception:
+                yield _sse("progress", {"step": "ecommerce", "message": "E-commerce scraping skipped", "done": True})
+
+            # Step 2c: Review collection
+            try:
+                yield _sse("progress", {"step": "reviews", "message": "Collecting customer reviews..."})
+                from pipeline.review_collector import collect_reviews
+                review_data = await collect_reviews(project.name)
+                yield _sse("progress", {"step": "reviews", "message": "Reviews collected", "done": True})
+            except Exception:
+                yield _sse("progress", {"step": "reviews", "message": "Review collection skipped", "done": True})
+
+            # Step 2d: Auto competitor discovery
+            competitor_data = None
+            manual_competitors = json.loads(project.competitor_urls) if project.competitor_urls else []
+            try:
+                yield _sse("progress", {"step": "competitors", "message": "Discovering competitors..."})
+                from pipeline.competitor_discovery import discover_competitors
+                discovered = await discover_competitors(
+                    brand_name=project.name,
+                    brand_url=project.brand_url,
+                    scrape_data=scrape_result,
+                    ecommerce_data=ecommerce_data,
+                    max_competitors=8,
+                )
+                competitor_data = discovered
+
+                # Merge manual + discovered names (dedup)
+                discovered_names = [c["name"] for c in discovered]
+                all_competitor_names = list(manual_competitors)
+                for name in discovered_names:
+                    if name.lower() not in [m.lower() for m in all_competitor_names]:
+                        all_competitor_names.append(name)
+
+                # Save merged list back to project
+                project.competitor_urls = json.dumps(all_competitor_names, ensure_ascii=False)
+                db.commit()
+
+                yield _sse("progress", {
+                    "step": "competitors",
+                    "message": f"Found {len(discovered)} competitors",
+                    "done": True,
+                    "competitors": discovered,
+                })
+            except Exception:
+                yield _sse("progress", {"step": "competitors", "message": "Competitor discovery skipped", "done": True})
+
             # Step 3: AI Analysis
             yield _sse("progress", {"step": "analyzing", "message": "Running AI brand analysis..."})
             project.status = ProjectStatus.ANALYZING
@@ -140,6 +204,10 @@ async def generate_report(project_id: int):
                 document_data=parsed_docs,
                 competitors=competitors,
                 language=project.language,
+                phase=phase,
+                ecommerce_data=ecommerce_data,
+                review_data=review_data,
+                competitor_data=competitor_data,
             )
             project.analysis_json = json.dumps(analysis, ensure_ascii=False)
             db.commit()
@@ -155,6 +223,7 @@ async def generate_report(project_id: int):
                 project_id=project_id,
                 analysis=analysis,
                 brand_name=project.name,
+                phase=phase,
             )
             project.pptx_path = str(pptx_path)
             project.status = ProjectStatus.REVIEW
@@ -261,9 +330,13 @@ def _project_dict(p: Project, include_slides=False, include_comments=False):
         "id": p.id, "name": p.name, "brand_url": p.brand_url,
         "competitor_urls": json.loads(p.competitor_urls) if p.competitor_urls else [],
         "status": p.status, "language": p.language,
+        "phase": getattr(p, "phase", None) or "brand_reality",
         "created_at": p.created_at.isoformat() if p.created_at else None,
         "updated_at": p.updated_at.isoformat() if p.updated_at else None,
         "has_pptx": bool(p.pptx_path),
+        "slide_count": len(p.slides) if p.slides else 0,
+        "file_count": len(p.files) if p.files else 0,
+        "comment_count": len(p.comments) if p.comments else 0,
     }
     if include_slides:
         d["slides"] = [{"order": s.order, "type": s.slide_type,

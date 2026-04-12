@@ -25,6 +25,7 @@ class Project(Base):
     competitor_urls = Column(Text, default="")  # JSON array
     status = Column(String(50), default=ProjectStatus.DRAFT)
     language = Column(String(10), default="en")  # "en" or "zh" or "en+zh"
+    phase = Column(String(30), default="brand_reality")  # brand_reality | market_structure | full
     analysis_json = Column(Text, default="{}")  # structured AI output
     pptx_path = Column(String(500))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

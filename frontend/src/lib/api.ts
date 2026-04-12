@@ -7,9 +7,13 @@ export interface Project {
   competitor_urls: string[];
   status: string;
   language: string;
+  phase: string;
   created_at: string;
   updated_at: string;
   has_pptx: boolean;
+  slide_count: number;
+  file_count: number;
+  comment_count: number;
   slides?: SlidePreview[];
   comments?: Comment[];
 }
@@ -34,6 +38,7 @@ export interface ProgressEvent {
   step: string;
   message: string;
   done?: boolean;
+  competitors?: { name: string; source: string; confidence: number; category_role?: string; reason?: string }[];
 }
 
 export async function listProjects(): Promise<Project[]> {
@@ -51,12 +56,14 @@ export async function createProject(data: {
   brand_url: string;
   competitor_urls: string[];
   language: string;
+  phase?: string;
 }): Promise<Project> {
   const form = new FormData();
   form.append("name", data.name);
   form.append("brand_url", data.brand_url);
   form.append("competitor_urls", JSON.stringify(data.competitor_urls));
   form.append("language", data.language);
+  if (data.phase) form.append("phase", data.phase);
   const res = await fetch(`${API_BASE}/api/projects`, { method: "POST", body: form });
   return res.json();
 }
@@ -75,13 +82,14 @@ export function generateReport(
   projectId: number,
   onProgress: (event: ProgressEvent) => void,
   onComplete: (data: { pptx_path: string; slide_count: number }) => void,
-  onError: (msg: string) => void
+  onError: (msg: string) => void,
+  phase: string = "full"
 ) {
-  const evtSource = new EventSource(`${API_BASE}/api/projects/${projectId}/generate`, {
-  });
+  const form = new FormData();
+  form.append("phase", phase);
 
   // Use fetch with POST for SSE
-  fetch(`${API_BASE}/api/projects/${projectId}/generate`, { method: "POST" })
+  fetch(`${API_BASE}/api/projects/${projectId}/generate`, { method: "POST", body: form })
     .then(async (res) => {
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
@@ -114,7 +122,11 @@ export function generateReport(
 
 export async function getSlides(projectId: number): Promise<SlidePreview[]> {
   const res = await fetch(`${API_BASE}/api/projects/${projectId}/slides`);
-  return res.json();
+  const slides: SlidePreview[] = await res.json();
+  return slides.map((s) => ({
+    ...s,
+    preview_url: s.preview_url?.startsWith("/") ? `${API_BASE}${s.preview_url}` : s.preview_url,
+  }));
 }
 
 export function slidePreviewUrl(slideId: number): string {
