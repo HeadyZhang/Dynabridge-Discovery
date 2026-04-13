@@ -155,11 +155,11 @@ async def generate_report(project_id: int, phase: str = Form("full")):
             except Exception:
                 yield _sse("progress", {"step": "reviews", "message": "Review collection skipped", "done": True})
 
-            # Step 2d: Auto competitor discovery
+            # Step 2d: Auto competitor discovery (uses Managed Agent with web_search when available)
             competitor_data = None
             manual_competitors = json.loads(project.competitor_urls) if project.competitor_urls else []
             try:
-                yield _sse("progress", {"step": "competitors", "message": "Discovering competitors..."})
+                yield _sse("progress", {"step": "competitors", "message": "Discovering competitors (AI agent research)..."})
                 from pipeline.competitor_discovery import discover_competitors
                 discovered = await discover_competitors(
                     brand_name=project.name,
@@ -213,6 +213,23 @@ async def generate_report(project_id: int, phase: str = Form("full")):
             db.commit()
             yield _sse("progress", {"step": "analyzing", "message": "Analysis complete", "done": True})
 
+            # Step 3b: Collect images for PPT
+            collected_images = None
+            try:
+                yield _sse("progress", {"step": "images", "message": "Collecting brand images..."})
+                from pipeline.image_collector import collect_images
+                collected_images = await collect_images(
+                    project_id=project_id,
+                    brand_name=project.name,
+                    brand_url=project.brand_url,
+                    scrape_data=scrape_result,
+                    ecommerce_data=ecommerce_data,
+                )
+                img_count = len(collected_images.get("all", []))
+                yield _sse("progress", {"step": "images", "message": f"Collected {img_count} images", "done": True})
+            except Exception:
+                yield _sse("progress", {"step": "images", "message": "Image collection skipped", "done": True})
+
             # Step 4: Generate PPT
             yield _sse("progress", {"step": "generating", "message": "Generating PowerPoint..."})
             project.status = ProjectStatus.GENERATING
@@ -224,9 +241,14 @@ async def generate_report(project_id: int, phase: str = Form("full")):
                 analysis=analysis,
                 brand_name=project.name,
                 phase=phase,
+                collected_images=collected_images,
             )
             project.pptx_path = str(pptx_path)
             project.status = ProjectStatus.REVIEW
+            db.commit()
+
+            # Delete old slide records before saving new ones
+            db.query(Slide).filter_by(project_id=project_id).delete()
             db.commit()
 
             # Save slide records

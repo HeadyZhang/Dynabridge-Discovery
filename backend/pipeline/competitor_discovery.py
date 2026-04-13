@@ -1,8 +1,9 @@
 """Automatic competitor discovery module.
 
-Combines two strategies:
-1. E-commerce scraping — search Amazon for the same category, extract brand names
-2. AI inference — ask Claude to identify competitors based on brand/category context
+Combines multiple strategies (in priority order):
+1. Claude Managed Agent — autonomous web research via web_search tool (preferred)
+2. E-commerce scraping — search Amazon for the same category, extract brand names
+3. AI inference — ask Claude to identify competitors based on brand/category context
 
 Returns a deduplicated list of competitor names with confidence and source.
 """
@@ -21,10 +22,29 @@ async def discover_competitors(
 ) -> list[dict]:
     """Discover competitors automatically.
 
+    Tries Claude Managed Agent first (web_search-based research).
+    Falls back to Amazon scraping + AI inference if Managed Agent is unavailable.
+
     Returns:
-        [{"name": str, "source": "amazon"|"ai"|"both", "confidence": float, "url": str|None}]
+        [{"name": str, "source": "managed_agent"|"amazon"|"ai"|"both", "confidence": float, "url": str|None}]
     """
-    # Run both discovery methods in parallel
+    # Strategy 1: Try Managed Agent (preferred — uses web_search, no Playwright needed)
+    try:
+        from pipeline.managed_agent import discover_competitors_managed
+
+        category_context = _infer_category(ecommerce_data)
+        managed_results = await discover_competitors_managed(
+            brand_name=brand_name,
+            brand_url=brand_url,
+            category_context=category_context,
+            max_competitors=max_competitors,
+        )
+        if managed_results and len(managed_results) >= 3:
+            return managed_results
+    except Exception:
+        pass  # Fall through to legacy methods
+
+    # Strategy 2: Legacy — Amazon scraping + AI inference in parallel
     amazon_task = _discover_from_amazon(brand_name, ecommerce_data)
     ai_task = _discover_from_ai(brand_name, brand_url, scrape_data)
 

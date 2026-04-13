@@ -1,111 +1,623 @@
-"""PPT Generation module — uses build_template slide builders.
+"""PPT Generation module — clones slides from the CozyFit reference PPTX.
 
-Reads analysis data from Claude and generates a full Brand Discovery
-PPTX deck matching the CozyFit reference style.
+Instead of building slides from scratch with python-pptx shapes,
+this module copies slides from the original template and replaces
+text content with new analysis data. This preserves all formatting,
+backgrounds, images, fonts, and layout exactly.
+
+Images are replaced with brand-specific images collected by image_collector.py.
+When no collected image is available, the template's original image is kept as-is.
+
+Template slide index map (0-based):
+  0  = Cover (Title_Slide)
+  1  = Agenda (Blank)
+  2  = Approach / Brand Building Process (Text Slide)
+  3  = Step 1 Divider (Text Slide)
+  4  = Section Header - Capabilities (Overview Slide)
+  5  = Content slide - title + 3 bullets + insight + image (Blank)
+  13 = Summary slide - title + paragraph + half-image (Text Slide)
+  14 = Section Header - Competition (Overview Slide)
+  17 = Competitor deep dive - two-column positioning + learnings (Blank)
+  23 = Landscape summary - bullets + sidebar text (Blank)
+  24 = Summary slide - Competition (Text Slide)
+  25 = Section Header - Consumer (Overview Slide)
+  91 = Thank You / 谢谢 (Divider Slide)
 """
+import copy
 import sys
 from pathlib import Path
 from pptx import Presentation
-from pptx.util import Inches
+from pptx.util import Pt, Emu
 
-# Allow importing from parent dir
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from build_template import (
-    SLIDE_W, SLIDE_H,
-    build_cover, build_agenda, build_approach, build_step_divider,
-    build_section_header, build_insight_slide, build_competitor_slide,
-    build_summary_slide, build_claims_vs_perception,
-    build_research_approach, build_subsection_divider,
-    build_bar_chart_slide, build_donut_chart_slide, build_dual_chart_slide,
-    build_next_steps, build_thank_you,
-)
 from config import OUTPUT_DIR, PREVIEW_DIR
 
+TEMPLATE_PATH = Path(__file__).parent.parent.parent / "templates" / "cozyfit_reference.pptx"
+
+# Template slide indices (0-based) — which original slide to clone for each type
+T_COVER = 0
+T_AGENDA = 1
+T_APPROACH = 2
+T_STEP_DIVIDER = 3
+T_SECTION_CAPABILITIES = 4
+T_CONTENT = 5          # title + bullets + insight + image
+T_CONTENT_ALT = 6      # alternate content layout
+T_SUMMARY = 13         # title + summary paragraph + half-image
+T_SECTION_COMPETITION = 14
+T_COMPETITOR = 17       # two-column: positioning + key learnings
+T_LANDSCAPE = 23        # landscape summary (bullets + sidebar)
+T_COMP_SUMMARY = 24
+T_SECTION_CONSUMER = 25
+T_THANK_YOU = 91
+
+
+# ── Slide Cloning Engine ─────────────────────────────────────
+
+_src_prs = None
+
+
+def _get_source():
+    """Load the reference PPTX once (cached)."""
+    global _src_prs
+    if _src_prs is None:
+        _src_prs = Presentation(str(TEMPLATE_PATH))
+    return _src_prs
+
+
+def _clone_slide(dst_prs, src_slide_idx):
+    """Clone a slide from the reference PPTX into dst_prs.
+
+    Copies all shapes (text boxes, images, groups) and their
+    relationships (embedded images). Returns the new slide object.
+    """
+    src_prs = _get_source()
+    src_slide = src_prs.slides[src_slide_idx]
+
+    # Find matching layout in dst by name
+    src_layout_name = src_slide.slide_layout.name
+    dst_layout = None
+    for layout in dst_prs.slide_layouts:
+        if layout.name == src_layout_name:
+            dst_layout = layout
+            break
+    if not dst_layout:
+        dst_layout = dst_prs.slide_layouts[6]  # Blank fallback
+
+    new_slide = dst_prs.slides.add_slide(dst_layout)
+
+    # Clear auto-generated placeholders from layout
+    for ph in list(new_slide.placeholders):
+        sp = ph._element
+        sp.getparent().remove(sp)
+
+    # Copy image/chart relationships, building old→new rId map
+    rId_map = {}
+    for rel in src_slide.part.rels.values():
+        if "image" in rel.reltype or "chart" in rel.reltype:
+            new_rId = new_slide.part.rels._add_relationship(
+                rel.reltype, rel._target, rel.is_external
+            )
+            rId_map[rel.rId] = new_rId
+
+    # Copy all shape elements, remapping relationship IDs
+    ns_r = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+    for shape in src_slide.shapes:
+        el = copy.deepcopy(shape._element)
+        # Remap rIds in all attributes
+        for attr_el in el.iter():
+            for attr_name in list(attr_el.attrib):
+                if attr_name == f"{ns_r}id" or attr_name.endswith("}id"):
+                    old_id = attr_el.attrib[attr_name]
+                    if old_id in rId_map:
+                        attr_el.attrib[attr_name] = rId_map[old_id]
+            if "embed" in attr_el.attrib:
+                old_id = attr_el.attrib["embed"]
+                if old_id in rId_map:
+                    attr_el.attrib["embed"] = rId_map[old_id]
+            if f"{ns_r}embed" in attr_el.attrib:
+                old_id = attr_el.attrib[f"{ns_r}embed"]
+                if old_id in rId_map:
+                    attr_el.attrib[f"{ns_r}embed"] = rId_map[old_id]
+        new_slide.shapes._spTree.append(el)
+
+    return new_slide
+
+
+def _find_text_shapes(slide):
+    """Return all shapes with text frames, sorted by top then left position."""
+    shapes = [s for s in slide.shapes if s.has_text_frame]
+    shapes.sort(key=lambda s: (s.top, s.left))
+    return shapes
+
+
+def _set_text_preserve_format(text_frame, new_text):
+    """Replace text in a text_frame while preserving per-run and per-paragraph formatting.
+
+    Accepts:
+      - str: replaces text line-by-line matching to existing paragraphs/runs
+      - list[str]: one string per paragraph, matched 1:1 to existing paragraphs
+
+    Key principle: each original run keeps its font/size/color; we only change .text.
+    """
+    if isinstance(new_text, list):
+        paragraphs = list(text_frame.paragraphs)
+        for i, para_text in enumerate(new_text):
+            if i < len(paragraphs):
+                _replace_para_text(paragraphs[i], para_text)
+            else:
+                _add_paragraph_after(text_frame, paragraphs[-1], para_text)
+        # Remove excess paragraphs
+        for i in range(len(new_text), len(paragraphs)):
+            p_el = paragraphs[i]._p
+            p_el.getparent().remove(p_el)
+    else:
+        # Split by newlines and match to existing paragraphs/runs
+        lines = new_text.split("\n")
+        paragraphs = list(text_frame.paragraphs)
+
+        if len(lines) == 1:
+            # Single line — distribute across existing runs in first para
+            if paragraphs:
+                _replace_para_text(paragraphs[0], lines[0])
+                for para in paragraphs[1:]:
+                    p_el = para._p
+                    p_el.getparent().remove(p_el)
+        else:
+            # Multiple lines — match each line to an existing paragraph
+            # If paragraph has multiple runs (different fonts), map lines to runs
+            if len(paragraphs) == 1 and len(paragraphs[0].runs) >= len(lines):
+                # Single paragraph with multiple runs — map lines to runs
+                _replace_runs_text(paragraphs[0], lines)
+            else:
+                for i, line in enumerate(lines):
+                    if i < len(paragraphs):
+                        _replace_para_text(paragraphs[i], line)
+                    else:
+                        _add_paragraph_after(text_frame, paragraphs[-1], line)
+                for i in range(len(lines), len(paragraphs)):
+                    p_el = paragraphs[i]._p
+                    p_el.getparent().remove(p_el)
+
+
+def _replace_para_text(paragraph, text):
+    """Replace text in a paragraph, distributing across existing runs.
+
+    Preserves each run's formatting (font, size, color, bold).
+    """
+    runs = paragraph.runs
+    if not runs:
+        paragraph.text = text
+        return
+
+    if len(runs) == 1:
+        runs[0].text = text
+    else:
+        # Multiple runs with potentially different formatting.
+        # Keep each run, clear all but the first, put text in first.
+        runs[0].text = text
+        for run in runs[1:]:
+            run.text = ""
+
+
+def _replace_runs_text(paragraph, texts):
+    """Replace text run-by-run, one text per run, preserving each run's formatting."""
+    runs = paragraph.runs
+    for i, text in enumerate(texts):
+        if i < len(runs):
+            runs[i].text = text
+    # Clear excess runs
+    for i in range(len(texts), len(runs)):
+        runs[i].text = ""
+
+
+def _add_paragraph_after(text_frame, template_para, text):
+    """Add a new paragraph after template_para, copying its formatting."""
+    new_p = copy.deepcopy(template_para._p)
+    template_para._p.addnext(new_p)
+    from pptx.text.text import _Paragraph
+    para = _Paragraph(new_p, template_para._parent)
+    _replace_para_text(para, text)
+
+
+# ── Text Truncation ──────────────────────────────────────────
+
+def _truncate(text, max_chars):
+    """Truncate text to max_chars, preferring sentence boundaries."""
+    if not text or len(text) <= max_chars:
+        return text
+    # Prefer cutting at last sentence end (period) before limit
+    last_period = text[:max_chars].rfind(".")
+    if last_period > max_chars * 0.4:
+        return text[:last_period + 1]
+    # Fall back to last comma or semicolon
+    for sep in (",", ";", " —", " –"):
+        pos = text[:max_chars].rfind(sep)
+        if pos > max_chars * 0.4:
+            return text[:pos] + "."
+    # Last resort: word boundary
+    cut = text[:max_chars].rfind(" ")
+    if cut < max_chars // 2:
+        cut = max_chars
+    return text[:cut].rstrip(" ,;:") + "."
+
+
+# ── Image Replacement ───────────────────────────────────────
+
+def _replace_slide_image(slide, image_path: Path):
+    """Replace the first picture shape on a slide with a new image.
+
+    Pre-crops the image file with PIL to exactly match the box aspect
+    ratio (cover + top-bias), then inserts the cropped image at the
+    exact box dimensions. No OOXML stretching or srcRect needed —
+    the file itself is the right shape.
+    """
+    if not image_path or not Path(image_path).exists():
+        return
+
+    from PIL import Image
+    from pptx.shapes.picture import Picture
+
+    for shape in slide.shapes:
+        if isinstance(shape, Picture):
+            box_left, box_top = shape.left, shape.top
+            box_w, box_h = shape.width, shape.height
+            box_ratio = box_w / box_h
+
+            try:
+                img = Image.open(str(image_path))
+                img_w, img_h = img.size
+            except Exception:
+                return
+
+            img_ratio = img_w / img_h
+
+            # Crop image to match box aspect ratio (cover mode)
+            if abs(img_ratio - box_ratio) > 0.05:
+                if img_ratio > box_ratio:
+                    # Image is wider — crop sides equally
+                    new_w = int(img_h * box_ratio)
+                    offset = (img_w - new_w) // 2
+                    img = img.crop((offset, 0, offset + new_w, img_h))
+                else:
+                    # Image is taller — crop with top bias (keep ~top 1/3)
+                    new_h = int(img_w / box_ratio)
+                    # Bias toward top: show top 30% anchor point
+                    top_offset = int((img_h - new_h) * 0.15)
+                    img = img.crop((0, top_offset, img_w, top_offset + new_h))
+
+            # Save cropped version to a temp file
+            cropped_path = image_path.parent / f"_cropped_{image_path.name}"
+            img.save(str(cropped_path), quality=92)
+            img.close()
+
+            # Remove old picture
+            sp = shape._element
+            sp.getparent().remove(sp)
+
+            # Insert pre-cropped image at exact box dimensions
+            slide.shapes.add_picture(
+                str(cropped_path), box_left, box_top, box_w, box_h
+            )
+            return
+
+
+class _ImagePool:
+    """Manages a pool of collected images, handing them out one at a time.
+
+    Images are categorized: brand images are used first for content slides,
+    product images for competitor slides, lifestyle for summaries.
+    """
+
+    def __init__(self, images: dict = None):
+        self._images = images or {}
+        self._brand_idx = 0
+        self._product_idx = 0
+        self._lifestyle_idx = 0
+        self._all_idx = 0
+
+    def next_brand(self) -> Path | None:
+        """Get next brand image, cycling through available images."""
+        imgs = self._images.get("brand", [])
+        if not imgs:
+            return self.next_any()
+        img = imgs[self._brand_idx % len(imgs)]
+        self._brand_idx += 1
+        return img
+
+    def next_product(self) -> Path | None:
+        """Get next product image."""
+        imgs = self._images.get("product", [])
+        if not imgs:
+            return self.next_brand()
+        img = imgs[self._product_idx % len(imgs)]
+        self._product_idx += 1
+        return img
+
+    def next_lifestyle(self) -> Path | None:
+        """Get next lifestyle/stock image."""
+        imgs = self._images.get("lifestyle", [])
+        if not imgs:
+            return self.next_brand()
+        img = imgs[self._lifestyle_idx % len(imgs)]
+        self._lifestyle_idx += 1
+        return img
+
+    def next_any(self) -> Path | None:
+        """Get any available image."""
+        imgs = self._images.get("all", [])
+        if not imgs:
+            return None
+        img = imgs[self._all_idx % len(imgs)]
+        self._all_idx += 1
+        return img
+
+    def has_images(self) -> bool:
+        return bool(self._images.get("all"))
+
+
+# ── High-level Slide Builders ────────────────────────────────
+
+def _build_cover(prs, brand_name, date_str):
+    """Clone cover slide, replace brand name and date.
+
+    Original cover has one text frame with 2 runs in 1 paragraph:
+      Run 0: "CozyFit"  (Montserrat 60pt)
+      Run 1: "Brand Discovery" (Montserrat 35pt, preceded by line break)
+    We replace run-by-run to preserve each font size.
+    """
+    slide = _clone_slide(prs, T_COVER)
+    shapes = _find_text_shapes(slide)
+    if len(shapes) >= 1:
+        tf = shapes[0].text_frame
+        para = tf.paragraphs[0]
+        runs = para.runs
+        if len(runs) >= 2:
+            # Run 0 = brand name, Run 1 = subtitle
+            runs[0].text = brand_name
+            runs[1].text = "\nBrand Discovery"
+        else:
+            _set_text_preserve_format(tf, f"{brand_name}\nBrand Discovery")
+    if len(shapes) >= 2:
+        _set_text_preserve_format(shapes[1].text_frame, date_str)
+    return slide
+
+
+def _build_agenda(prs):
+    """Clone agenda slide (no text changes needed — it's generic)."""
+    return _clone_slide(prs, T_AGENDA)
+
+
+def _build_approach(prs):
+    """Clone the 'Our Brand Building Process' approach slide."""
+    return _clone_slide(prs, T_APPROACH)
+
+
+def _build_step_divider(prs):
+    """Clone the 'Step 1 – Discovery' divider."""
+    return _clone_slide(prs, T_STEP_DIVIDER)
+
+
+def _build_section_header(prs, section_type):
+    """Clone a section header. section_type: 'capabilities'|'competition'|'consumer'."""
+    idx_map = {
+        "capabilities": T_SECTION_CAPABILITIES,
+        "competition": T_SECTION_COMPETITION,
+        "consumer": T_SECTION_CONSUMER,
+    }
+    return _clone_slide(prs, idx_map.get(section_type, T_SECTION_CAPABILITIES))
+
+
+def _build_content_slide(prs, title, bullets, insight_text, template_idx=T_CONTENT):
+    """Clone a content slide (title + bullets + insight + image).
+
+    Template shape layout (sorted by position):
+      Shape 0 (top): Title — ALL CAPS, orange, Montserrat Bold
+      Shape 1 (middle): Bullets — 3 paragraphs, Montserrat, space_before/after
+      Shape 2 (bottom): Insight — teal/blue text, single paragraph
+      Shape 3: Image (preserved as-is from template)
+
+    Character limits (from original CozyFit template):
+      Title: ~55 chars, Bullets: ~100 chars each, Insight: ~90 chars
+    """
+    slide = _clone_slide(prs, template_idx)
+    shapes = _find_text_shapes(slide)
+
+    if len(shapes) >= 1:
+        _set_text_preserve_format(shapes[0].text_frame, _truncate(title, 55))
+    if len(shapes) >= 2:
+        if isinstance(bullets, list):
+            bullets = [_truncate(b, 85) for b in bullets[:3]]
+        else:
+            bullets = [_truncate(bullets, 85)]
+        _set_text_preserve_format(shapes[1].text_frame, bullets)
+    if len(shapes) >= 3:
+        _set_text_preserve_format(shapes[2].text_frame, _truncate(insight_text, 85))
+
+    return slide
+
+
+def _build_competitor_slide(prs, name, positioning_bullets, learnings_bullets):
+    """Clone a competitor deep-dive slide (two-column: positioning + learnings).
+
+    Template shape layout:
+      Shape 0: Title — "DICKIES — POSITIONING & KEY LEARNINGS"
+      Shape 1: Left column — "POSITIONING\nbullet1\nbullet2\n..."
+      Shape 2: Right column — "KEY LEARNINGS\nbullet1\nbullet2\n..."
+      Shape 3+: Images (preserved)
+    """
+    slide = _clone_slide(prs, T_COMPETITOR)
+    shapes = _find_text_shapes(slide)
+
+    if len(shapes) >= 1:
+        _set_text_preserve_format(shapes[0].text_frame, _truncate(f"{name.upper()} — POSITIONING & KEY LEARNINGS", 60))
+
+    if len(shapes) >= 2:
+        positioning_text = ["POSITIONING"] + [_truncate(b, 90) for b in positioning_bullets[:3]]
+        _set_text_preserve_format(shapes[1].text_frame, positioning_text)
+
+    if len(shapes) >= 3:
+        learnings_text = ["KEY LEARNINGS"] + [_truncate(b, 90) for b in learnings_bullets[:3]]
+        _set_text_preserve_format(shapes[2].text_frame, learnings_text)
+
+    return slide
+
+
+def _build_landscape_slide(prs, title, bullets, sidebar_text):
+    """Clone the landscape summary slide (slide 24 pattern)."""
+    slide = _clone_slide(prs, T_LANDSCAPE)
+    shapes = _find_text_shapes(slide)
+
+    if len(shapes) >= 1:
+        _set_text_preserve_format(shapes[0].text_frame, _truncate(title, 60))
+    if len(shapes) >= 2:
+        if isinstance(bullets, list):
+            bullets = [_truncate(b, 100) for b in bullets]
+        else:
+            bullets = [_truncate(bullets, 100)]
+        _set_text_preserve_format(shapes[1].text_frame, bullets)
+    if len(shapes) >= 3:
+        _set_text_preserve_format(shapes[2].text_frame, _truncate(sidebar_text, 300))
+
+    return slide
+
+
+def _build_summary_slide(prs, title, summary_text, template_idx=T_SUMMARY):
+    """Clone a summary slide (title + flowing paragraph + half-image)."""
+    slide = _clone_slide(prs, template_idx)
+    shapes = _find_text_shapes(slide)
+
+    # Summary slide has 2 text shapes: paragraph body and title
+    # They may be in different order depending on position sort
+    title_shape = None
+    body_shape = None
+    for s in shapes:
+        text = s.text_frame.text.strip().upper()
+        if "SUMMARY" in text or len(text) < 40:
+            title_shape = s
+        else:
+            body_shape = s
+
+    if title_shape:
+        _set_text_preserve_format(title_shape.text_frame, _truncate(title, 40))
+    if body_shape:
+        _set_text_preserve_format(body_shape.text_frame, _truncate(summary_text, 260))
+
+    return slide
+
+
+def _build_thank_you(prs):
+    """Clone the Thank You slide."""
+    return _clone_slide(prs, T_THANK_YOU)
+
+
+# ── Main Generator ───────────────────────────────────────────
 
 async def generate_pptx(
     project_id: int,
     analysis: dict,
     brand_name: str,
     phase: str = "full",
+    collected_images: dict = None,
 ) -> tuple[Path, list[dict]]:
     """Generate a Brand Discovery PPTX from analysis data.
+
+    Clones slides from the CozyFit reference template and replaces
+    text content with analysis results. If collected_images is provided,
+    replaces template images with brand-specific images.
+
+    Args:
+        collected_images: Output from image_collector.collect_images()
+            {"brand": [Path], "product": [Path], "lifestyle": [Path], "all": [Path]}
 
     Returns:
         (pptx_path, slide_previews)
     """
-    prs = Presentation()
-    prs.slide_width = SLIDE_W
-    prs.slide_height = SLIDE_H
+    img_pool = _ImagePool(collected_images)
+
+    # Start from the reference PPTX to get its theme, layouts, fonts
+    prs = Presentation(str(TEMPLATE_PATH))
+
+    # Remove ALL existing slides — we'll clone fresh ones
+    while len(prs.slides) > 0:
+        rId = prs.slides._sldIdLst[0].get(
+            "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+        )
+        prs.part.drop_rel(rId)
+        prs.slides._sldIdLst.remove(prs.slides._sldIdLst[0])
 
     slide_meta = []
+    date_str = analysis.get("date", "2026")
 
-    # 1. Cover
-    build_cover(prs, brand_name, "Brand Discovery",
-                analysis.get("date", "2026"))
+    # ── 1. Cover ──────────────────────────────────────────────
+    _build_cover(prs, brand_name, date_str)
     slide_meta.append({"type": "cover", "content": {"brand_name": brand_name}})
 
-    # 2. Agenda
-    build_agenda(prs)
+    # ── 2. Agenda ─────────────────────────────────────────────
+    _build_agenda(prs)
     slide_meta.append({"type": "agenda", "content": {}})
 
-    # 3. Approach
-    build_approach(prs)
+    # ── 3. Approach ───────────────────────────────────────────
+    _build_approach(prs)
     slide_meta.append({"type": "approach", "content": {}})
 
-    # 4. Step 1 – Discovery
-    build_step_divider(prs, 1, "DISCOVERY")
+    # ── 4. Step 1 – Discovery ─────────────────────────────────
+    _build_step_divider(prs)
     slide_meta.append({"type": "step", "content": {"step": 1}})
 
     # ── Capabilities ──────────────────────────────────────────
 
-    build_section_header(prs, "A closer look at the\nbrand capabilities", "capabilities")
+    _build_section_header(prs, "capabilities")
     slide_meta.append({"type": "section", "content": {"section": "capabilities"}})
 
     cap = analysis.get("capabilities", {})
 
-    # Insight slides for each capabilities section
-    for key in ["execution_summary", "product_offer", "product_fundamentals", "pricing_position", "channel_analysis"]:
+    # Content slides for each capability dimension
+    content_keys = [
+        "execution_summary", "product_offer", "product_fundamentals",
+        "pricing_position", "channel_analysis",
+    ]
+    # Alternate between template slide 6 and 7 for visual variety
+    template_pool = [T_CONTENT, T_CONTENT_ALT]
+
+    for i, key in enumerate(content_keys):
         section = cap.get(key)
         if section:
-            build_insight_slide(prs,
+            tmpl = template_pool[i % len(template_pool)]
+            slide = _build_content_slide(
+                prs,
                 title=section.get("title", key.replace("_", " ").upper()),
                 bullets=section.get("bullets", []),
                 insight_text=section.get("insight", ""),
-                has_image=section.get("has_image", False),
+                template_idx=tmpl,
             )
+            if img_pool.has_images():
+                _replace_slide_image(slide, img_pool.next_brand())
             slide_meta.append({"type": "insight", "content": section})
 
     # Brand challenges
     for challenge in cap.get("brand_challenges", []):
-        build_insight_slide(prs,
-            title=challenge.get("title", "BRAND CHALLENGES"),
+        slide = _build_content_slide(
+            prs,
+            title=challenge.get("title", "BRAND CHALLENGE"),
             bullets=challenge.get("bullets", []),
             insight_text=challenge.get("insight", ""),
         )
+        if img_pool.has_images():
+            _replace_slide_image(slide, img_pool.next_brand())
         slide_meta.append({"type": "insight", "content": challenge})
 
     # Capabilities summary
     cap_summary = cap.get("capabilities_summary", "")
     if cap_summary:
-        build_summary_slide(prs, "CAPABILITIES SUMMARY", cap_summary)
+        slide = _build_summary_slide(prs, "CAPABILITIES SUMMARY", cap_summary)
+        if img_pool.has_images():
+            _replace_slide_image(slide, img_pool.next_lifestyle())
         slide_meta.append({"type": "summary", "content": {"text": cap_summary}})
 
-    # Claims vs. Perception
-    cvp = cap.get("claims_vs_perception", {})
-    if cvp and (cvp.get("brand_claims") or cvp.get("customer_perception")):
-        build_claims_vs_perception(prs,
-            brand_claims=cvp.get("brand_claims", []),
-            customer_perception=cvp.get("customer_perception", []),
-            alignment=cvp.get("alignment", ""),
-            gaps=cvp.get("gaps", ""),
-        )
-        slide_meta.append({"type": "claims_vs_perception", "content": cvp})
-
-    # ── Competition (Phase 2+) ───────────────────────────────
+    # ── Competition (Phase 2+) ────────────────────────────────
 
     if phase in ("market_structure", "full") and analysis.get("competition"):
-        build_section_header(prs, "A closer look at the\ncompetition", "competition")
+        _build_section_header(prs, "competition")
         slide_meta.append({"type": "section", "content": {"section": "competition"}})
 
         comp = analysis.get("competition", {})
@@ -113,98 +625,78 @@ async def generate_pptx(
         # Market overview
         overview = comp.get("market_overview", {})
         if overview:
-            build_insight_slide(prs,
+            slide = _build_content_slide(
+                prs,
                 title=overview.get("title", "COMPETITIVE LANDSCAPE"),
                 bullets=overview.get("bullets", []),
                 insight_text=overview.get("insight", ""),
             )
+            if img_pool.has_images():
+                _replace_slide_image(slide, img_pool.next_product())
             slide_meta.append({"type": "insight", "content": overview})
 
-        # Competitor analysis slides
+        # Competitor deep dives
         for competitor in comp.get("competitor_analyses", []):
-            build_competitor_slide(prs,
+            pos_bullets = [
+                f"{p['label']}: {p['detail']}"
+                for p in competitor.get("positioning", [])
+            ]
+            learn_bullets = [
+                f"{k['label']}: {k['detail']}"
+                for k in competitor.get("key_learnings", [])
+            ]
+            slide = _build_competitor_slide(
+                prs,
                 name=competitor.get("name", "Competitor"),
-                positioning=[(p["label"], p["detail"]) for p in competitor.get("positioning", [])],
-                key_learnings=[(k["label"], k["detail"]) for k in competitor.get("key_learnings", [])],
+                positioning_bullets=pos_bullets,
+                learnings_bullets=learn_bullets,
             )
+            if img_pool.has_images():
+                _replace_slide_image(slide, img_pool.next_product())
             slide_meta.append({"type": "competitor", "content": competitor})
+
+        # Landscape summary
+        landscape = comp.get("landscape_summary", {})
+        if landscape:
+            slide = _build_landscape_slide(
+                prs,
+                title=landscape.get("title", "A WELL-ESTABLISHED LANDSCAPE"),
+                bullets=landscape.get("bullets", []),
+                sidebar_text=landscape.get("sidebar", ""),
+            )
+            slide_meta.append({"type": "landscape", "content": landscape})
 
         # Competition summary
         comp_summary = comp.get("competition_summary", "")
         if comp_summary:
-            build_summary_slide(prs, "COMPETITION SUMMARY", comp_summary)
+            slide = _build_summary_slide(prs, "COMPETITION SUMMARY", comp_summary, T_COMP_SUMMARY)
+            if img_pool.has_images():
+                _replace_slide_image(slide, img_pool.next_lifestyle())
             slide_meta.append({"type": "summary", "content": {"text": comp_summary}})
 
     # ── Consumer (Full only) ──────────────────────────────────
 
     if phase == "full" and analysis.get("consumer"):
-        build_section_header(prs, "A closer look at the\nconsumer", "consumer")
+        _build_section_header(prs, "consumer")
         slide_meta.append({"type": "section", "content": {"section": "consumer"}})
 
         consumer = analysis.get("consumer", {})
 
-        # Research approach
-        research = consumer.get("research_approach")
-        if research:
-            build_research_approach(prs,
-                [(r["label"], r["detail"]) for r in research])
-            slide_meta.append({"type": "research", "content": {"rows": research}})
-
-        # Demographics sub-section
-        demographics = consumer.get("demographics", {})
-        if demographics:
-            build_subsection_divider(prs, "Demographics &\nBackground")
-            slide_meta.append({"type": "subsection", "content": {"title": "Demographics"}})
-
-        # Chart slides
-        for chart in consumer.get("charts", []):
-            chart_type = chart.get("chart_type", "hbar")
-            if chart_type == "dual":
-                build_dual_chart_slide(prs,
-                    title=chart.get("title", ""),
-                    subtitle_text=chart.get("subtitle", None),
-                    left_title=chart.get("left_title", ""),
-                    left_categories=chart.get("left_categories"),
-                    left_values=chart.get("left_values"),
-                    right_title=chart.get("right_title", ""),
-                    right_categories=chart.get("right_categories"),
-                    right_values=chart.get("right_values"),
-                    left_type=chart.get("left_type", "donut"),
-                    right_type=chart.get("right_type", "hbar"),
-                )
-            elif chart_type in ("bar", "hbar"):
-                build_bar_chart_slide(prs,
-                    title=chart.get("title", ""),
-                    subtitle_text=chart.get("subtitle", None),
-                    question=chart.get("question", ""),
-                    categories=chart.get("categories"),
-                    values=chart.get("values"),
-                    is_horizontal=(chart_type == "hbar"),
-                )
-            slide_meta.append({"type": "chart", "content": chart})
-
-        # Consumer insights
+        # Consumer insights as content slides
         for insight in consumer.get("key_insights", []):
-            build_insight_slide(prs,
-                title=insight.get("title", "KEY CONSUMER INSIGHTS"),
+            slide = _build_content_slide(
+                prs,
+                title=insight.get("title", "CONSUMER INSIGHT"),
                 bullets=insight.get("bullets", []),
                 insight_text=insight.get("insight", ""),
             )
+            if img_pool.has_images():
+                _replace_slide_image(slide, img_pool.next_lifestyle())
             slide_meta.append({"type": "insight", "content": insight})
-
-    # ── Next Steps ────────────────────────────────────────────
-
-    next_steps = analysis.get("next_steps", [])
-    if next_steps:
-        build_next_steps(prs, next_steps)
-        slide_meta.append({"type": "next_steps", "content": {"steps": next_steps}})
 
     # ── Thank You ─────────────────────────────────────────────
 
-    build_thank_you(prs,
-                    phone="13736758116",
-                    email="contact@dynabridge.com",
-                    website="https://www.dynabridge.cn/")
+    _build_thank_you(prs)
     slide_meta.append({"type": "thank_you", "content": {}})
 
     # ── Save ──────────────────────────────────────────────────
@@ -222,21 +714,48 @@ async def generate_pptx(
     return output_path, slide_meta
 
 
+# ── Preview Generation ───────────────────────────────────────
+
 def _generate_previews(pptx_path: Path, project_id: int) -> list[Path]:
-    """Convert PPTX slides to PNG previews via LibreOffice, PIL fallback."""
+    """Convert PPTX slides to PNG previews via LibreOffice + PyMuPDF."""
     import subprocess
+    import tempfile
 
     preview_dir = PREVIEW_DIR / f"project_{project_id}"
     preview_dir.mkdir(parents=True, exist_ok=True)
 
+    # Clean old previews
+    for old in preview_dir.glob("*.png"):
+        old.unlink()
+
+    # Step 1: PPTX -> PDF via LibreOffice
     try:
-        subprocess.run([
-            "soffice", "--headless", "--convert-to", "png",
-            "--outdir", str(preview_dir), str(pptx_path)
-        ], capture_output=True, timeout=60)
-        return sorted(preview_dir.glob("*.png"))
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return _generate_placeholder_previews(pptx_path, preview_dir)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            subprocess.run([
+                "soffice", "--headless", "--convert-to", "pdf",
+                "--outdir", tmpdir, str(pptx_path)
+            ], capture_output=True, timeout=120)
+
+            pdf_files = list(Path(tmpdir).glob("*.pdf"))
+            if not pdf_files:
+                return _generate_placeholder_previews(pptx_path, preview_dir)
+
+            # Step 2: PDF -> per-page PNG via PyMuPDF
+            import fitz
+            doc = fitz.open(str(pdf_files[0]))
+            paths = []
+            for i, page in enumerate(doc):
+                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                png_path = preview_dir / f"slide_{i:03d}.png"
+                pix.save(str(png_path))
+                paths.append(png_path)
+            doc.close()
+            return paths
+
+    except (FileNotFoundError, subprocess.TimeoutExpired, ImportError):
+        pass
+
+    return _generate_placeholder_previews(pptx_path, preview_dir)
 
 
 def _generate_placeholder_previews(pptx_path: Path, preview_dir: Path) -> list[Path]:

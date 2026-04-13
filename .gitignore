@@ -28,7 +28,10 @@ previews/
 .DS_Store
 Thumbs.db
 
-# Reference files (large PDFs)
+# Reference files (large)
 *.pdf
 *.docx
 !references/README.md
+templates/*.pptx
+~$*.pptx
+image/

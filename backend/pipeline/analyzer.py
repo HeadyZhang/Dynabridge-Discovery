@@ -29,19 +29,24 @@ SLIDE TITLES: Must be ALL CAPS, descriptive, and opinionated — they state a fi
   GOOD: "PRICE-PERFORMANCE DEFINES COZYFIT'S CURRENT POSITION"
   BAD: "PRODUCT ANALYSIS" or "PRICING OVERVIEW" (too generic)
 
-BULLETS: Each bullet must be 2-3 sentences with specific evidence from the data provided.
-  GOOD: "Across all channels, CozyFit emphasizes comfort, stretch, and pockets — functional
-         benefits that match category table stakes. There is no emotional storytelling, aspirational
-         imagery, or lifestyle positioning anywhere on the site or Amazon listing."
-  BAD: "The brand has a good product offering." (too vague, no evidence)
+BULLETS: Exactly 3 bullets per slide. Each bullet MUST be exactly 1 sentence, MAX 80 characters.
+  Brevity is critical — the slide text box is narrow (half-width). Longer text will be cut off.
+  GOOD: "CozyFit leads on comfort and stretch but lacks emotional brand story." (70 chars)
+  GOOD: "Amazon is the primary channel — no DTC or retail presence exists." (65 chars)
+  BAD: Any bullet over 80 characters. Count carefully before writing each bullet.
 
-INSIGHT: A single provocative sentence that reframes the findings strategically — something a
-  CMO would underline. It should challenge assumptions, not summarize.
-  GOOD: "CozyFit has built a strong product — but not yet a brand."
+INSIGHT: One single sentence, MAX 80 characters. Provocative strategic reframe.
+  GOOD: "CozyFit has built a product — but not yet a brand." (51 chars)
   BAD: "The brand has both strengths and weaknesses." (too generic)
 
-SUMMARY PARAGRAPHS: Write as flowing narrative paragraphs (3-5 sentences), not bullet points.
-  Connect findings to strategic implications in a way that sets up the next step.
+SUMMARY PARAGRAPHS: 2-3 sentences, MAX 250 characters total. Be concise.
+
+## CRITICAL: Character Limits — STRICTLY ENFORCED (text boxes are fixed-size, overflow is hidden)
+- Slide title: max 50 characters
+- Each bullet: max 80 characters (1 short sentence)
+- Insight text (blue bar): max 80 characters
+- Summary paragraph: max 250 characters
+COUNT YOUR CHARACTERS. Any text exceeding these limits will be truncated and look broken.
 
 ## Analysis Standards
 - Evidence-based: cite specific data points, prices, phrases from the provided content
@@ -828,85 +833,84 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
         "execution_summary": {
             "title": f"HOW {BN} WAS BUILT: EXECUTION FIRST",
             "bullets": [
-                f"{bn} prioritized getting the product right, pricing competitively, and moving quickly to market. Early website messaging focuses entirely on functional benefits — comfort, stretch, pockets — with no origin story or brand narrative.",
-                f"Key execution decisions — launching on Amazon first, investing in product iteration over brand building, pricing below premium competitors — reveal a founder-led, product-first approach. These choices were pragmatic and effective for initial market entry.",
-                f"This execution-first mindset allowed {bn} to enter a crowded category, build a review base, and achieve sales velocity. But it deferred the harder work of brand definition, emotional positioning, and audience targeting — gaps that now limit growth potential.",
+                f"{bn} prioritized product quality and pricing over brand building. Messaging is purely functional.",
+                f"Amazon-first launch with product iteration over brand — a founder-led, execution-first approach.",
+                f"Built sales velocity and reviews, but deferred brand definition — gaps that now limit growth.",
             ],
-            "insight": f"{bn}'s early success was driven by strong execution choices rather than brand-led planning — but execution alone cannot sustain premium growth.",
+            "insight": f"{bn}'s success was execution-driven — but execution alone cannot sustain premium growth.",
             "has_image": True,
         },
         "product_offer": {
             "title": "A FUNCTIONAL, FEATURE-LED, VALUE-FOCUSED OFFER",
             "bullets": [
-                f"Across channels, {bn} emphasizes comfort, fit, features, and affordability over emotional brand storytelling. Product pages list stretch fabric, multiple pockets, breathability, and easy care — functional benefits that match category table stakes.",
-                f"There is no emotional storytelling, aspirational imagery, or lifestyle positioning anywhere on the site or Amazon listings. The communication is purely rational: what the product does, not what wearing it means.",
-                f"The offer is easy to understand and compare, which supports trial and conversion on Amazon. But it also means {bn} is positioned as interchangeable with any competitor offering similar features at a similar price.",
+                f"{bn} emphasizes comfort, fit, and affordability. Product pages list functional benefits only.",
+                "No aspirational imagery or lifestyle positioning. Communication is purely rational, not emotional.",
+                f"Easy to compare on Amazon — drives conversion but positions {bn} as interchangeable.",
             ],
-            "insight": f"Today, {bn} presents itself as a practical, feature-driven solution — a strong product, but not yet a brand.",
+            "insight": f"{bn} presents as a practical solution — a strong product, but not yet a brand.",
             "has_image": True,
         },
         "product_fundamentals": {
-            "title": f"PRODUCT FUNDAMENTALS ARE STRONG AND COMPETITIVE",
+            "title": f"PRODUCT FUNDAMENTALS ARE STRONG",
             "bullets": [
-                f"{bn}'s fabric technology — 4-way stretch, moisture-wicking, wrinkle-resistant — matches or exceeds what premium competitors offer at higher price points. Customer reviews consistently praise the material quality and comfort over 12+ hour shifts.",
-                f"The feature set is competitive: multiple pockets (5-7 per piece), modern jogger-style pants, V-neck and mock-wrap top options, and a growing color range. These fundamentals meet the category's evolving expectations for modern medical apparel.",
-                f"Size range and SKU depth are adequate but not exceptional. The product line covers core categories (tops, pants, jackets) without venturing into accessories, underscrubs, or footwear — categories that drive loyalty and repeat purchases for competitors like FIGS.",
+                f"{bn}'s fabric tech — 4-way stretch, moisture-wicking — matches premium competitors at lower prices.",
+                "Competitive features: 5-7 pockets, jogger pants, modern tops, growing color range.",
+                "Core categories covered (tops, pants, jackets) but no accessories — limiting loyalty drivers.",
             ],
-            "insight": f"The product is {bn}'s strongest asset — the fundamentals are competitive enough to support a premium position if the brand can build the perception to match.",
+            "insight": f"The product is {bn}'s strongest asset — competitive enough for a premium position.",
         },
         "pricing_position": {
-            "title": f"PRICE-PERFORMANCE DEFINES {BN}'S CURRENT POSITION",
+            "title": f"PRICE-PERFORMANCE DEFINES {BN}'S POSITION",
             "bullets": [
-                f"{bn} is positioned at $28-$42 per piece, placing it below premium lifestyle brands like FIGS ($38-$90) while offering comparable functional performance. This creates strong price-performance value that drives Amazon conversion.",
-                f"Pricing messaging reinforces value and practicality rather than exclusivity or aspirational status. Promotional language (deals, bundles, value packs) further anchors the brand in the accessible tier of the market.",
-                f"This pricing strategy supports trial acquisition and volume growth, but limits how premium the brand can feel today. Moving upmarket requires more than a price increase — it requires a brand story that justifies the higher price to the consumer.",
+                f"{bn} at $28-$42/piece sits below FIGS ($38-$90) with comparable performance. Strong value.",
+                "Promotional language (deals, bundles) anchors the brand in accessible tier, not premium.",
+                "Drives volume but limits premium perception. Moving up requires brand story, not just price.",
             ],
-            "insight": f"{bn}'s role in the market is defined by strong price-performance rather than brand-led positioning — a solid foundation, but one that creates a ceiling if not evolved.",
+            "insight": f"{bn}'s role is defined by value, not brand — solid base, but a ceiling if not evolved.",
         },
         "channel_analysis": {
             "title": f"AMAZON DRIVES GROWTH AND TRUST",
             "bullets": [
-                f"Primary distribution through Amazon, where {bn} has built a strong review base (2,000+ reviews, 4.3+ average rating) and consistent sales volume. Amazon's trust infrastructure — reviews, Prime shipping, easy returns — does the credibility work that the brand itself has not yet built.",
-                f"The brand website (Shopify) serves as a secondary DTC channel with limited lifestyle content, basic product photography, and minimal brand storytelling. It functions as a store, not as a brand experience.",
-                f"Social media presence exists across Instagram and Facebook but lacks consistent posting cadence, engagement strategy, or community building. There is no influencer program or ambassador strategy visible.",
+                f"Primary channel: Amazon with 2,000+ reviews and 4.3+ rating. Amazon's trust does the work.",
+                "Brand website (Shopify) is a store, not a brand experience. Minimal lifestyle content.",
+                "Social media lacks consistent cadence, engagement strategy, or ambassador programs.",
             ],
-            "insight": f"Amazon has been {bn}'s strongest growth engine — but the platform builds Amazon's brand, not {bn}'s. Long-term brand equity requires owning the customer relationship.",
+            "insight": f"Amazon builds Amazon's brand, not {bn}'s. Equity requires owning the relationship.",
         },
         "brand_challenges": [
             {
-                "title": f"THE {BN} NAME CREATES A STRUCTURAL CHALLENGE",
+                "title": f"THE {BN} NAME CREATES A CHALLENGE",
                 "bullets": [
-                    f"The brand name signals comfort and coziness — attributes that, while appealing, may not convey the professional credibility, durability, or performance that healthcare professionals prioritize when choosing work apparel.",
-                    f"In a category where names like FIGS (fresh, clean) and Cherokee (heritage, authority) carry clear positioning, a comfort-focused name risks pigeonholing the brand before the consumer even sees the product.",
-                    f"This is not just a cosmetic issue — the name shapes first impressions on Amazon search results, affects click-through rates on listings, and influences whether healthcare professionals take the brand seriously as a professional choice.",
+                    "The name signals comfort but may not convey professional credibility or performance.",
+                    "FIGS and Cherokee carry clear positioning — a comfort name risks pigeonholing.",
+                    "The name shapes Amazon search impressions and CTR — structural, not cosmetic.",
                 ],
-                "insight": "A brand name is the first promise a brand makes — and right now, it may be making the wrong one.",
+                "insight": "A brand name is the first promise — and it may be making the wrong one.",
             },
             {
-                "title": "BRAND NARRATIVE AND EMOTIONAL CONNECTION ARE ABSENT",
+                "title": "BRAND NARRATIVE AND EMOTIONAL CONNECTION ABSENT",
                 "bullets": [
-                    "No clear origin story, founder narrative, mission statement, or 'why we exist' messaging anywhere on the website or Amazon presence. The brand communicates only what it sells, never why it matters.",
-                    "Competitors like FIGS have built emotional connections through founder stories, healthcare worker advocacy, and community building. Cherokee leverages decades of heritage. Even value brands tell a story about accessibility and democratization.",
-                    f"Without a narrative, {bn} competes purely on features and price — the most vulnerable position in any consumer category. Any competitor can match features; no competitor can copy an authentic story.",
+                    "No origin story or mission messaging. The brand says what it sells, not why.",
+                    "FIGS builds community, Cherokee has heritage. Even value brands tell a story.",
+                    f"Without narrative, {bn} competes on features and price — most vulnerable position.",
                 ],
-                "insight": "A brand without a story is a commodity waiting to be undercut — or a blank canvas waiting to be defined.",
+                "insight": "A brand without a story is a commodity — or a canvas waiting to be defined.",
             },
             {
-                "title": "THE NEXT STEP IS A CLEAR, RESEARCH-LED DECISION",
+                "title": "THE NEXT STEP IS RESEARCH-LED CLARITY",
                 "bullets": [
-                    f"{bn} has reached an inflection point: the execution-first approach that built the business cannot take it to the next stage. What's needed now is not more product iteration, but strategic clarity about who the brand is for and what it stands for.",
-                    "This decision — brand positioning, target audience, naming strategy — cannot be made from intuition alone. It requires understanding what consumers actually want, how they perceive the brand today, and where unmet needs exist in the market.",
-                    "The good news: the product fundamentals and channel traction give the brand a strong foundation to build on. The risk: delaying this decision allows competitors to claim the positioning territory that could be theirs.",
+                    f"{bn} has reached an inflection point: execution alone won't drive next-stage growth.",
+                    "Positioning and audience decisions require consumer research, not intuition.",
+                    "Strong fundamentals + channel traction = foundation. Delay risks losing territory.",
                 ],
-                "insight": f"{bn} has built the engine — now it needs a destination. The next step is a clear, research-led brand strategy.",
+                "insight": f"{bn} has built the engine — now it needs a destination.",
             },
         ],
         "capabilities_summary": (
-            f"{bn} is an execution-driven brand with competitive products and strong Amazon performance, "
-            "now facing the need to build a brand narrative, clarify its naming and brand architecture, "
-            "and develop emotional positioning to support long-term premium growth. The product fundamentals "
-            "are strong enough to support a more ambitious brand position — but the brand itself has not yet "
-            "been built. What comes next must be led by consumer insight and competitive clarity, not guesswork."
+            f"{bn} is execution-driven with strong products and Amazon traction, "
+            "but lacks brand narrative and emotional positioning. "
+            "Product fundamentals can support a premium position — the brand just hasn't been built yet. "
+            "Next steps: consumer insight and competitive clarity."
         ),
         "claims_vs_perception": {
             "brand_claims": [
@@ -943,93 +947,89 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
             "title": "A MATURE, WELL-ESTABLISHED MEDICAL APPAREL MARKET",
             "competitor_names": ["FIGS", "Cherokee", "Carhartt", "Med Couture", "Healing Hands", "Dickies", "Jaanuu", "Barco", "WonderWink", "Dagacci"],
             "bullets": [
-                f"The medical scrubs market has evolved from purely functional uniforms to a lifestyle-adjacent category, with total US market size exceeding $10B. Clear market roles have emerged: premium lifestyle (FIGS), heritage authority (Cherokee, Dickies), fashion-forward (Med Couture, Jaanuu), and value accessibility (Amazon generics).",
-                "Key dynamics shaping competition include the shift from wholesale to DTC, the rise of Amazon as a discovery and purchase channel, growing demand for modern fits (jogger pants, athletic silhouettes), and increasing consumer willingness to pay for quality — 88%+ of scrubs buyers agree they'd pay more for products that deliver on what matters to them.",
-                f"Most successful competitors have established clear, differentiated positioning — they own a specific role in the consumer's mind. {bn} has not yet claimed a distinct role, competing instead on features and price in a space where brand identity drives long-term loyalty and premium pricing.",
+                "US scrubs market exceeds $10B with clear roles: premium (FIGS), heritage (Cherokee), fashion (Med Couture).",
+                "Key shifts: wholesale to DTC, Amazon as discovery channel, demand for modern fits and athletic silhouettes.",
+                f"Top brands own a clear market role. {bn} competes on features and price — no distinct brand identity yet.",
             ],
-            "insight": "The most successful brands in this market win by owning a clear role — not by trying to be everything to everyone.",
+            "insight": "Winning brands own a clear role — not by trying to be everything to everyone.",
         },
         "focused_competitors": ["FIGS", "Cherokee", "Carhartt", "Med Couture", "Healing Hands", "Jaanuu"],
         "competitor_analyses": [
             {
                 "name": "FIGS",
-                "banner_description": "The premium lifestyle pioneer that proved scrubs buyers will pay for brand",
+                "banner_description": "Premium lifestyle pioneer proving scrubs buyers will pay for brand",
                 "positioning": [
-                    {"label": "Target Audience", "detail": "Young healthcare professionals (25-40) who see scrubs as a lifestyle statement and professional identity marker. Skews female, urban, social-media-engaged."},
-                    {"label": "Price Point", "detail": "$38-$90 per piece, firmly premium. Pricing is a feature, not a barrier — it signals quality and exclusivity."},
-                    {"label": "Key Differentiator", "detail": "Created the 'fashion-forward medical apparel' category. Strong DTC brand with aspirational imagery, founder story, and community engagement."},
+                    {"label": "Target Audience", "detail": "Young pros (25-40) who see scrubs as lifestyle. Skews female, urban."},
+                    {"label": "Price Point", "detail": "$38-$90/piece, firmly premium. Price signals quality."},
+                    {"label": "Key Differentiator", "detail": "Created fashion-forward medical apparel. Strong DTC + community."},
                 ],
                 "key_learnings": [
-                    {"label": "Brand-led growth works", "detail": "FIGS proved that scrubs buyers will pay premium for brand, not just function. Their success validates the opportunity for brand building in this category."},
-                    {"label": "Ambassador model scales", "detail": "Healthcare influencer program drives significant new customer acquisition. Community building creates switching costs that features alone cannot."},
-                    {"label": "Vulnerability: premium fatigue", "detail": "Economic pressure is pushing some FIGS buyers to seek similar quality at lower prices. The 'FIGS quality at accessible prices' territory is open."},
+                    {"label": "Brand-led growth works", "detail": "Proved scrubs buyers pay premium for brand, not just function."},
+                    {"label": "Ambassador model scales", "detail": "Influencer program drives acquisition. Community = switching costs."},
+                    {"label": "Premium fatigue", "detail": "Some buyers seek FIGS quality at lower prices. Territory is open."},
                 ],
             },
             {
                 "name": "Cherokee",
-                "banner_description": "The heritage authority — decades of trust, slow to modernize",
+                "banner_description": "Heritage authority — decades of trust, slow to modernize",
                 "positioning": [
-                    {"label": "Target Audience", "detail": "Broad healthcare workforce, value-conscious buyers who prioritize reliability and wide availability. Skews older, less brand-sensitive."},
-                    {"label": "Price Point", "detail": "$18-$45 per piece, accessible mid-market. Frequent promotions through uniform retailers."},
-                    {"label": "Key Differentiator", "detail": "Heritage brand with decades of category credibility (84% brand awareness) and the widest distribution network in the category."},
+                    {"label": "Target Audience", "detail": "Broad workforce, value-conscious. Skews older, less brand-sensitive."},
+                    {"label": "Price Point", "detail": "$18-$45/piece, accessible mid-market with frequent promos."},
+                    {"label": "Key Differentiator", "detail": "84% brand awareness + widest distribution in the category."},
                 ],
                 "key_learnings": [
-                    {"label": "Trust through longevity", "detail": "Brand recognition built over decades creates a baseline of credibility that newer brands cannot easily replicate. But trust can also be borrowed through product quality and social proof."},
-                    {"label": "Distribution depth", "detail": "Available everywhere — Amazon, Walmart, specialty stores, hospital gift shops. But brand experience is inconsistent across channels, diluting the brand."},
-                    {"label": "Slow to modernize", "detail": "Website and social presence lag behind newer DTC competitors. Product design has evolved but brand communication still feels dated. Vulnerable to modern challengers."},
+                    {"label": "Trust via longevity", "detail": "Decades of credibility newer brands can't easily replicate."},
+                    {"label": "Distribution depth", "detail": "Available everywhere but inconsistent brand experience."},
+                    {"label": "Slow to modernize", "detail": "Website and social lag behind DTC competitors. Vulnerable."},
                 ],
             },
             {
                 "name": "Carhartt",
-                "banner_description": "The durability icon crossing from workwear into healthcare",
+                "banner_description": "Durability icon crossing from workwear into healthcare",
                 "positioning": [
-                    {"label": "Target Audience", "detail": "Healthcare workers who identify with 'hard work' culture. Strong appeal to male buyers and those in physically demanding roles."},
-                    {"label": "Price Point", "detail": "$25-$55 per piece, mid-market to slightly premium. Pricing reflects workwear heritage brand equity."},
-                    {"label": "Key Differentiator", "detail": "Leverages iconic workwear brand identity and 'built to last' credibility. The Carhartt name carries durability associations that transfer directly to scrubs."},
+                    {"label": "Target Audience", "detail": "Workers who value 'hard work' culture. Strong male appeal."},
+                    {"label": "Price Point", "detail": "$25-$55/piece, mid-to-premium. Heritage brand pricing."},
+                    {"label": "Key Differentiator", "detail": "Iconic 'built to last' credibility transfers to scrubs."},
                 ],
                 "key_learnings": [
-                    {"label": "Brand transfer works", "detail": "Carhartt proved that a strong brand identity from an adjacent category can create instant credibility in medical apparel. The 'tough enough for your shift' positioning resonates."},
-                    {"label": "Limited healthcare depth", "detail": "Product range is narrower than pure-play scrubs brands. Scrubs are a category extension, not the core business — which limits innovation and responsiveness."},
-                    {"label": "Gender gap", "detail": "Brand identity skews masculine, which limits appeal to the 70% female scrubs market. An opportunity for brands that can own durability AND inclusive fit."},
+                    {"label": "Brand transfer works", "detail": "Adjacent category credibility creates instant trust."},
+                    {"label": "Limited depth", "detail": "Narrower range — scrubs are an extension, not core business."},
+                    {"label": "Gender gap", "detail": "Masculine brand limits appeal to 70% female scrubs market."},
                 ],
             },
             {
                 "name": "Med Couture",
                 "banner_description": "Fashion-forward scrubs with modern fits and bold patterns",
                 "positioning": [
-                    {"label": "Target Audience", "detail": "Style-conscious healthcare professionals who want scrubs that look good, not just perform. Younger, trend-aware, predominantly female."},
-                    {"label": "Price Point", "detail": "$30-$55 per piece, mid-to-premium. Pricing reflects design and fabric quality."},
-                    {"label": "Key Differentiator", "detail": "Strongest fashion-forward positioning in the category. Bold prints, modern silhouettes, and trend-responsive collections set them apart from functional-first competitors."},
+                    {"label": "Target Audience", "detail": "Style-conscious pros wanting good-looking scrubs. Young, female."},
+                    {"label": "Price Point", "detail": "$30-$55/piece, mid-to-premium for design quality."},
+                    {"label": "Key Differentiator", "detail": "Bold prints, modern silhouettes, trend-responsive collections."},
                 ],
                 "key_learnings": [
-                    {"label": "Style drives loyalty", "detail": "Med Couture shows that a segment of buyers will choose scrubs based on style as much as function. Their repeat purchase rate suggests style creates stronger loyalty than features."},
-                    {"label": "Niche positioning limits scale", "detail": "Fashion-forward positioning appeals strongly to a specific segment but limits mass-market growth. The brand struggles to appeal to performance-first or value-first buyers."},
-                    {"label": "Pattern over platform", "detail": "Med Couture innovates on pattern and color, not on fabric technology or fit engineering. This creates an opportunity for brands that can offer style AND substance."},
+                    {"label": "Style drives loyalty", "detail": "Buyers choose on style as much as function. High repeat rate."},
+                    {"label": "Niche limits scale", "detail": "Fashion-forward appeals to one segment but not mass market."},
+                    {"label": "Pattern over platform", "detail": "Innovates on color, not fabric tech. Style+substance gap open."},
                 ],
             },
         ],
         "landscape_summary": {
             "market_roles": [
-                {"role": "Premium Lifestyle", "brands": ["FIGS", "Jaanuu"], "description": "Brand-led, DTC-focused, aspirational positioning. Commands highest prices and strongest emotional loyalty."},
-                {"role": "Heritage Authority", "brands": ["Cherokee", "Dickies"], "description": "Decades of category credibility, wide distribution, trusted but not modern. Wins on familiarity and availability."},
-                {"role": "Performance Crossover", "brands": ["Carhartt"], "description": "Leverages brand equity from adjacent categories. Strong on durability perception, limited on healthcare-specific innovation."},
-                {"role": "Fashion-Forward", "brands": ["Med Couture", "Healing Hands"], "description": "Style-first positioning with modern fits and bold patterns. Appeals to aesthetically driven buyers."},
+                {"role": "Premium Lifestyle", "brands": ["FIGS", "Jaanuu"], "description": "Brand-led, DTC, aspirational. Highest prices + loyalty."},
+                {"role": "Heritage Authority", "brands": ["Cherokee", "Dickies"], "description": "Decades of trust, wide distribution, but not modern."},
+                {"role": "Performance Crossover", "brands": ["Carhartt"], "description": "Adjacent category equity. Durable but limited depth."},
+                {"role": "Fashion-Forward", "brands": ["Med Couture", "Healing Hands"], "description": "Style-first with modern fits and bold patterns."},
             ],
-            "white_space": f"Quality + authenticity at an accessible price — no brand currently owns 'real healthcare worker performance' positioning with premium product execution. {bn}'s product fundamentals could fill this gap if supported by a clear brand story.",
+            "white_space": f"No brand owns 'real performance at accessible price.' {bn}'s fundamentals could fill this gap with a clear brand story.",
             "category_norms": [
-                "Comfort/stretch claims are table stakes — every brand now offers 4-way stretch",
-                "Color variety is expected (20+ colors) and growing",
-                "Pocket count and design are key feature differentiators on Amazon",
-                "Review volume and rating drive Amazon conversion and discovery",
+                "Comfort/stretch are table stakes — every brand offers 4-way stretch",
+                "Color variety expected (20+ colors) and growing",
+                "Pocket count/design are key Amazon differentiators",
             ],
         },
         "competition_summary": (
-            f"The scrubs market is well-established, with leading brands succeeding by owning a clear and focused role — "
-            "such as lifestyle identity, medical authority, durability, value, style, or comfort — rather than trying to "
-            f"compete across everything at once. The white space for {bn} lies at the intersection of premium product "
-            "performance and accessible, authentic positioning: a brand that earns trust through product excellence rather "
-            "than lifestyle aspiration or heritage credibility. Claiming this territory requires a clear brand strategy, "
-            "a defined target audience, and consistent execution across channels."
+            f"Leading scrubs brands win by owning a clear role — lifestyle, heritage, durability, or style. "
+            f"The white space for {bn} is premium product performance at accessible pricing. "
+            "Claiming this requires a defined brand strategy, target audience, and consistent execution."
         ),
     }
 
@@ -1298,22 +1298,19 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
             ],
         },
         "consumer_summary": (
-            "Endurance First professionals spend the most, set the highest performance standards, and define what quality "
-            "means in scrubs — making them the most valuable and influential segment in the market. Their needs align directly "
-            f"with {bn}'s product strengths, and their channel behavior matches {bn}'s established Amazon presence. Building on "
-            "these insights, the next step is to define a clear and differentiated brand position that resonates with this segment's "
-            "performance-first mindset and scales credibly across the broader market."
+            "Endurance First professionals spend the most and define what quality means in scrubs. "
+            f"Their needs align with {bn}'s product strengths and Amazon presence. "
+            "Next: define a brand position that resonates with performance-first buyers."
         ),
         "key_insights": [
             {
                 "title": "KEY CONSUMER INSIGHTS",
                 "bullets": [
-                    "Comfort is the #1 purchase driver across all segments (50-72%), far ahead of brand name — functional excellence is the entry ticket. No brand can win on aspiration alone without delivering on comfort and durability first.",
-                    "Amazon dominates as a purchase channel (59-64% across segments), but DTC brand websites show strong traction (16-33%) — consumers are open to buying direct, especially Polished Pro (33%) and Endurance First (20%) segments.",
-                    "88% of scrubs buyers agree or strongly agree they'd pay more for scrubs that clearly deliver on what matters to them. The willingness to pay is there — what's missing is a brand that gives them a clear reason to believe.",
-                    "Inconsistent sizing is the #1 frustration across ALL segments (35-40%). Any brand that can solve the sizing problem credibly will remove the biggest barrier to loyalty and repeat purchase.",
+                    "Comfort is the #1 driver (50-72%) across all segments. Functional excellence is the entry ticket.",
+                    "Amazon dominates (59-64%) but DTC shows traction (16-33%). Consumers are open to buying direct.",
+                    "88% would pay more for scrubs that deliver. Willingness exists — a clear brand reason is missing.",
                 ],
-                "insight": "There is a clear opportunity to win on proven performance without competing on brand heritage or lifestyle aspiration — the consumer is willing to pay, they just need a reason to believe.",
+                "insight": "Consumers will pay for proven performance — they just need a reason to believe.",
             },
         ],
     }
