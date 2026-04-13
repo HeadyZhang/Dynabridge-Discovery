@@ -326,15 +326,7 @@ export default function Home() {
               <PanelLeftOpen className="w-5 h-5" />
             )}
           </button>
-          <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center">
-            <span className="text-white font-bold text-sm">db</span>
-          </div>
-          <h1 className="text-lg font-semibold text-neutral-900">
-            {t("app.title", locale)}
-          </h1>
-          <span className="text-sm text-neutral-400 hidden sm:inline">
-            {t("app.subtitle", locale)}
-          </span>
+          <img src="/logo.png" alt="DynaBridge" className="h-9 object-contain" />
         </div>
         <div className="flex items-center gap-2">
           <button

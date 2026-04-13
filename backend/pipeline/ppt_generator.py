@@ -48,6 +48,15 @@ T_COMPETITOR = 17       # two-column: positioning + key learnings
 T_LANDSCAPE = 23        # landscape summary (bullets + sidebar)
 T_COMP_SUMMARY = 24
 T_SECTION_CONSUMER = 25
+T_RESEARCH_APPROACH = 26    # Research methodology (label + detail rows)
+T_SEGMENT_DIVIDER = 47      # "Market Segmentation" divider
+T_SEGMENT_OVERVIEW = 49     # All segments at a glance (names + % + taglines)
+T_MEET_SEGMENT = 51         # "Meet the [Segment]" narrative page
+T_TARGET_RECOMMENDATION = 76  # "PRIMARY TARGET: [NAME]" with rationale bullets
+T_WHY_TARGET = 77           # "WHY [SEGMENT] IS THE RIGHT FOCUS" with bullets
+T_ENABLES = 78              # "WHAT THIS CHOICE ENABLES (AND DOES NOT)"
+T_CONSUMER_SUMMARY = 79     # Consumer summary (half-text, half-image)
+T_FINAL_SUMMARY = 80        # Three-column summary + closing insight
 T_THANK_YOU = 91
 
 
@@ -510,6 +519,252 @@ def _build_thank_you(prs):
     return _clone_slide(prs, T_THANK_YOU)
 
 
+# ── Consumer Slide Builders ─────────────────────────────────
+
+def _build_research_approach(prs, research_items):
+    """Clone research approach slide (slide 26 pattern).
+
+    Template has label+detail rows: Format, Participants, Analysis, Timing.
+    Each row is two text shapes side by side (label left, detail right).
+    """
+    slide = _clone_slide(prs, T_RESEARCH_APPROACH)
+    shapes = _find_text_shapes(slide)
+
+    # Shape 0 = title, then pairs of (label, detail)
+    if len(shapes) >= 1:
+        _set_text_preserve_format(shapes[0].text_frame, "RESEARCH APPROACH")
+
+    # Map research_items to the label+detail shape pairs
+    pair_idx = 0
+    for item in research_items[:5]:
+        label_shape_idx = 2 + pair_idx * 2
+        detail_shape_idx = label_shape_idx - 1
+        # Template order: detail shape comes before label in position sort
+        # Actual layout: shapes alternate detail(left-wide) and label(left-narrow)
+        if detail_shape_idx < len(shapes) and label_shape_idx < len(shapes):
+            _set_text_preserve_format(shapes[label_shape_idx].text_frame, item.get("label", ""))
+            _set_text_preserve_format(shapes[detail_shape_idx].text_frame, _truncate(item.get("detail", ""), 200))
+        pair_idx += 1
+
+    return slide
+
+
+def _build_segment_overview(prs, segments):
+    """Clone segment overview slide (slide 49 pattern).
+
+    Shows all segments at a glance: name, %, tagline for each.
+    Template has 5 columns with: percentage text, image, name, tagline.
+    """
+    slide = _clone_slide(prs, T_SEGMENT_OVERVIEW)
+    shapes = _find_text_shapes(slide)
+
+    # Shape 0 = title
+    if shapes:
+        _set_text_preserve_format(shapes[0].text_frame, "CONSUMER SEGMENTS AT A GLANCE")
+
+    # Shapes 1-5 = percentages, 11-15 = names, 16-20 = taglines
+    # Find percentage shapes (short text, typically "27%")
+    pct_shapes = []
+    name_shapes = []
+    tagline_shapes = []
+    for s in shapes[1:]:
+        text = s.text_frame.text.strip()
+        if text.endswith("%") and len(text) <= 4:
+            pct_shapes.append(s)
+        elif len(text) < 30 and not text.endswith("%"):
+            name_shapes.append(s)
+        elif len(text) > 30:
+            tagline_shapes.append(s)
+
+    for i, seg in enumerate(segments[:5]):
+        if i < len(pct_shapes):
+            _set_text_preserve_format(pct_shapes[i].text_frame, f"{seg.get('size_pct', '?')}%")
+        if i < len(name_shapes):
+            _set_text_preserve_format(name_shapes[i].text_frame, seg.get("name", f"Segment {i+1}"))
+        if i < len(tagline_shapes):
+            _set_text_preserve_format(tagline_shapes[i].text_frame, _truncate(seg.get("tagline", ""), 80))
+
+    return slide
+
+
+def _build_meet_segment(prs, segment):
+    """Clone 'Meet the [Segment]' slide (slide 51 pattern).
+
+    Full-bleed background image with overlay text:
+      Shape 0: background (skip)
+      Shape 1: background image
+      Shape 2: Segment name (ALL CAPS, large)
+      Shape 3: Tagline (one line)
+      Shape 4: Narrative paragraph (5-7 sentences)
+    """
+    slide = _clone_slide(prs, T_MEET_SEGMENT)
+    shapes = _find_text_shapes(slide)
+
+    name = segment.get("name", "SEGMENT")
+    tagline = segment.get("tagline", "")
+    narrative = segment.get("narrative", "")
+
+    # Find the shapes by content length pattern
+    for s in shapes:
+        text = s.text_frame.text.strip()
+        if text.isupper() and len(text) < 30:
+            _set_text_preserve_format(s.text_frame, name.upper())
+        elif len(text) < 80 and not text.isupper() and "Meet" not in text:
+            _set_text_preserve_format(s.text_frame, _truncate(tagline, 70))
+        elif len(text) > 80 or "Meet" in text:
+            _set_text_preserve_format(s.text_frame, _truncate(narrative, 500))
+
+    return slide
+
+
+def _build_target_recommendation(prs, target):
+    """Clone PRIMARY TARGET slide (slide 76 pattern).
+
+    Shape 0: Title — "PRIMARY TARGET: [SEGMENT NAME]"
+    Shape 1: Rationale bullets (4 bullets)
+    Shape 2: Image (right half)
+    Shape 3: Insight text (bottom)
+    """
+    slide = _clone_slide(prs, T_TARGET_RECOMMENDATION)
+    shapes = _find_text_shapes(slide)
+
+    title = target.get("title", "PRIMARY TARGET")
+
+    if len(shapes) >= 1:
+        _set_text_preserve_format(shapes[0].text_frame, _truncate(title, 55))
+    if len(shapes) >= 2:
+        bullets = target.get("rationale_bullets", [])
+        bullets = [_truncate(b, 85) for b in bullets[:4]]
+        _set_text_preserve_format(shapes[1].text_frame, bullets)
+    if len(shapes) >= 3:
+        _set_text_preserve_format(shapes[2].text_frame, _truncate(target.get("insight", ""), 85))
+
+    return slide
+
+
+def _build_why_target(prs, target):
+    """Clone WHY [SEGMENT] slide (slide 77 pattern).
+
+    Shape 0: Title
+    Shape 1: Rationale bullets (left)
+    Shape 2: Image (right)
+    Shape 3: Insight (bottom)
+    """
+    slide = _clone_slide(prs, T_WHY_TARGET)
+    shapes = _find_text_shapes(slide)
+
+    segment_name = target.get("primary_segment", "THIS SEGMENT")
+
+    if len(shapes) >= 1:
+        _set_text_preserve_format(shapes[0].text_frame, _truncate(f"WHY {segment_name.upper()} IS THE RIGHT FOCUS", 55))
+    if len(shapes) >= 2:
+        bullets = target.get("rationale_bullets", [])
+        bullets = [_truncate(b, 85) for b in bullets[:4]]
+        _set_text_preserve_format(shapes[1].text_frame, bullets)
+    if len(shapes) >= 3:
+        _set_text_preserve_format(shapes[2].text_frame, _truncate(target.get("insight", ""), 85))
+
+    return slide
+
+
+def _build_enables_slide(prs, target):
+    """Clone ENABLES slide (slide 78 pattern).
+
+    Shape 0: Title
+    Shape 1: "What This Does Not Decide Yet" (right column)
+    Shape 2: "What Targeting [X] Unlocks" (left column)
+    Shape 3: Closing insight (bottom)
+    """
+    slide = _clone_slide(prs, T_ENABLES)
+    shapes = _find_text_shapes(slide)
+
+    segment_name = target.get("primary_segment", "this segment")
+    enables = target.get("enables", [])
+    does_not = target.get("does_not_decide", [])
+
+    if len(shapes) >= 1:
+        _set_text_preserve_format(shapes[0].text_frame, "WHAT THIS CHOICE ENABLES (AND DOES NOT)")
+
+    # Left column = enables, right column = does not decide
+    enables_text = f"What Targeting {segment_name} Unlocks\n" + "\n".join(
+        _truncate(e, 85) for e in enables[:3]
+    )
+    does_not_text = "What This Does Not Decide Yet\n" + "\n".join(
+        _truncate(d, 85) for d in does_not[:3]
+    )
+
+    if len(shapes) >= 3:
+        # shapes sorted by top,left — left column first
+        _set_text_preserve_format(shapes[2].text_frame, enables_text)
+        _set_text_preserve_format(shapes[1].text_frame, does_not_text)
+    if len(shapes) >= 4:
+        _set_text_preserve_format(shapes[3].text_frame, _truncate(target.get("insight", ""), 100))
+
+    return slide
+
+
+def _build_consumer_summary(prs, summary_text):
+    """Clone consumer summary slide (slide 79 — half-text, half-image)."""
+    slide = _clone_slide(prs, T_CONSUMER_SUMMARY)
+    shapes = _find_text_shapes(slide)
+
+    if len(shapes) >= 1:
+        _set_text_preserve_format(shapes[0].text_frame, "CONSUMER SUMMARY")
+    if len(shapes) >= 2:
+        _set_text_preserve_format(shapes[1].text_frame, _truncate(summary_text, 260))
+
+    return slide
+
+
+def _build_final_summary(prs, summary_data):
+    """Clone three-column summary slide (slide 80 pattern).
+
+    Shape 0: Title — "SUMMARY & NEXT STEPS"
+    Shape 1-3: Column headers (Consumer, Capabilities, Competition)
+    Shape 4-6: Column text paragraphs
+    Shape 7: Closing insight (bottom)
+    """
+    slide = _clone_slide(prs, T_FINAL_SUMMARY)
+    shapes = _find_text_shapes(slide)
+
+    if len(shapes) >= 1:
+        _set_text_preserve_format(shapes[0].text_frame, "SUMMARY & NEXT STEPS")
+
+    cap_text = summary_data.get("capabilities_column", "")
+    comp_text = summary_data.get("competition_column", "")
+    cons_text = summary_data.get("consumer_column", "")
+    closing = summary_data.get("closing_insight", "")
+
+    # Find column header shapes (short text) and body shapes (long text)
+    headers = []
+    bodies = []
+    for s in shapes[1:]:
+        text = s.text_frame.text.strip()
+        if len(text) < 20:
+            headers.append(s)
+        elif len(text) > 20:
+            bodies.append(s)
+
+    # Set headers
+    header_labels = ["Capabilities", "Competition", "Consumer"]
+    for i, label in enumerate(header_labels):
+        if i < len(headers):
+            _set_text_preserve_format(headers[i].text_frame, label)
+
+    # Set body paragraphs
+    column_texts = [cap_text, comp_text, cons_text]
+    for i, txt in enumerate(column_texts):
+        if i < len(bodies):
+            _set_text_preserve_format(bodies[i].text_frame, _truncate(txt, 250))
+
+    # Closing insight (last shape with substantial width)
+    closing_shapes = [s for s in shapes if s.width > 7000000 and s.top > 4000000]
+    if closing_shapes:
+        _set_text_preserve_format(closing_shapes[0].text_frame, _truncate(closing, 120))
+
+    return slide
+
+
 # ── Main Generator ───────────────────────────────────────────
 
 async def generate_pptx(
@@ -682,7 +937,13 @@ async def generate_pptx(
 
         consumer = analysis.get("consumer", {})
 
-        # Consumer insights as content slides
+        # Research approach
+        research = consumer.get("research_approach", [])
+        if research:
+            _build_research_approach(prs, research)
+            slide_meta.append({"type": "research", "content": {"items": research}})
+
+        # Key consumer insights as content slides
         for insight in consumer.get("key_insights", []):
             slide = _build_content_slide(
                 prs,
@@ -693,6 +954,52 @@ async def generate_pptx(
             if img_pool.has_images():
                 _replace_slide_image(slide, img_pool.next_lifestyle())
             slide_meta.append({"type": "insight", "content": insight})
+
+        # Segmentation divider
+        segments = consumer.get("segments", [])
+        if segments:
+            _clone_slide(prs, T_SEGMENT_DIVIDER)
+            slide_meta.append({"type": "divider", "content": {"title": "Market Segmentation"}})
+
+            # Segment overview (all segments at a glance)
+            _build_segment_overview(prs, segments)
+            slide_meta.append({"type": "segment_overview", "content": {"segments": [s.get("name") for s in segments]}})
+
+            # Individual "Meet the [Segment]" slides
+            for seg in segments[:5]:
+                slide = _build_meet_segment(prs, seg)
+                if img_pool.has_images():
+                    _replace_slide_image(slide, img_pool.next_lifestyle())
+                slide_meta.append({"type": "meet_segment", "content": seg})
+
+        # Target recommendation
+        target = consumer.get("target_recommendation", {})
+        if target:
+            slide = _build_target_recommendation(prs, target)
+            if img_pool.has_images():
+                _replace_slide_image(slide, img_pool.next_lifestyle())
+            slide_meta.append({"type": "target", "content": target})
+
+            _build_why_target(prs, target)
+            slide_meta.append({"type": "why_target", "content": target})
+
+            _build_enables_slide(prs, target)
+            slide_meta.append({"type": "enables", "content": target})
+
+        # Consumer summary
+        cons_summary = consumer.get("consumer_summary", "")
+        if cons_summary:
+            slide = _build_consumer_summary(prs, cons_summary)
+            if img_pool.has_images():
+                _replace_slide_image(slide, img_pool.next_lifestyle())
+            slide_meta.append({"type": "consumer_summary", "content": {"text": cons_summary}})
+
+    # ── Final Summary & Next Steps ───────────────────────────
+
+    summary_data = analysis.get("summary_and_next_steps", {})
+    if summary_data and phase == "full":
+        _build_final_summary(prs, summary_data)
+        slide_meta.append({"type": "final_summary", "content": summary_data})
 
     # ── Thank You ─────────────────────────────────────────────
 
