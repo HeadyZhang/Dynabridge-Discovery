@@ -3,11 +3,14 @@
 FastAPI Router mounted at /api/knowledge.
 Does NOT modify any existing Module A routes.
 """
+import csv
+import io
 import json
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import create_engine
+from fastapi.responses import StreamingResponse
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
 from config import DB_PATH
@@ -159,6 +162,166 @@ def get_stats():
     return result
 
 
+@router.get("/cases/{case_id}/similar")
+def get_similar_cases(case_id: int, limit: int = Query(3, ge=1, le=10)):
+    """Find cases similar to the given case based on industry and content."""
+    db = _get_db()
+    case = db.query(CaseProject).get(case_id)
+    if not case:
+        db.close()
+        raise HTTPException(404, "Case not found")
+
+    # Build search query from case metadata
+    query_parts = [case.brand_name]
+    if case.industry:
+        query_parts.append(case.industry)
+    if case.sub_category:
+        query_parts.append(case.sub_category)
+
+    # Try vector search first, fall back to FTS
+    results = []
+    try:
+        from module_b.search_index import VectorIndex
+        vec = VectorIndex()
+        vec_results = vec.search(" ".join(query_parts), limit=limit + 5)
+        seen_brands = {case.brand_name.lower()}
+        for r in vec_results:
+            if r["brand_name"].lower() not in seen_brands:
+                seen_brands.add(r["brand_name"].lower())
+                # Look up full case info
+                similar = db.query(CaseProject).filter(
+                    func.lower(CaseProject.brand_name) == r["brand_name"].lower()
+                ).first()
+                if similar:
+                    results.append({**_case_summary(similar), "similarity_score": r["score"]})
+            if len(results) >= limit:
+                break
+    except Exception:
+        pass
+
+    # Fallback: same industry
+    if len(results) < limit and case.industry:
+        same_industry = db.query(CaseProject).filter(
+            CaseProject.industry == case.industry,
+            CaseProject.id != case_id,
+        ).limit(limit - len(results)).all()
+        existing_ids = {r["id"] for r in results}
+        for c in same_industry:
+            if c.id not in existing_ids:
+                results.append({**_case_summary(c), "similarity_score": 0.5})
+
+    db.close()
+    return results[:limit]
+
+
+@router.get("/export")
+def export_cases(
+    format: str = Query("csv", regex="^(csv|json)$"),
+    industry: Optional[str] = Query(None),
+):
+    """Export case data as CSV or JSON."""
+    db = _get_db()
+    q = db.query(CaseProject)
+    if industry:
+        q = q.filter(CaseProject.industry.ilike(f"%{industry}%"))
+    cases = q.order_by(CaseProject.brand_name).all()
+
+    if format == "json":
+        data = [_case_summary(c) for c in cases]
+        db.close()
+        return data
+
+    # CSV export
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Brand", "Industry", "Sub-Category", "Files", "Size (MB)",
+        "Completeness", "Discovery", "Strategy", "Guidelines", "Survey",
+    ])
+    for c in cases:
+        writer.writerow([
+            c.brand_name, c.industry or "", c.sub_category or "",
+            c.total_files, c.total_size_mb, f"{c.completeness_score:.0%}",
+            "Yes" if c.has_discovery else "No",
+            "Yes" if c.has_strategy else "No",
+            "Yes" if c.has_guidelines else "No",
+            "Yes" if c.has_survey else "No",
+        ])
+    db.close()
+
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=dynabridge_cases.csv"},
+    )
+
+
+@router.get("/dashboard")
+def get_dashboard_data():
+    """Aggregated data for the discovery dashboard."""
+    db = _get_db()
+    cases = db.query(CaseProject).all()
+
+    # Phase coverage across all cases
+    phase_coverage = {
+        "discovery": sum(1 for c in cases if c.has_discovery),
+        "strategy": sum(1 for c in cases if c.has_strategy),
+        "guidelines": sum(1 for c in cases if c.has_guidelines),
+        "survey": sum(1 for c in cases if c.has_survey),
+    }
+
+    # Completeness distribution
+    completeness_buckets = {"0-25%": 0, "25-50%": 0, "50-75%": 0, "75-100%": 0}
+    for c in cases:
+        score = c.completeness_score
+        if score < 0.25:
+            completeness_buckets["0-25%"] += 1
+        elif score < 0.50:
+            completeness_buckets["25-50%"] += 1
+        elif score < 0.75:
+            completeness_buckets["50-75%"] += 1
+        else:
+            completeness_buckets["75-100%"] += 1
+
+    # Industry breakdown
+    industries = {}
+    for c in cases:
+        ind = c.industry or "Unclassified"
+        industries[ind] = industries.get(ind, 0) + 1
+
+    # File type distribution
+    files = db.query(CaseFile).all()
+    doc_types = {}
+    for f in files:
+        dt = f.doc_type or "other"
+        doc_types[dt] = doc_types.get(dt, 0) + 1
+
+    # Language distribution
+    languages = {}
+    for f in files:
+        lang = f.language_hint or "unknown"
+        languages[lang] = languages.get(lang, 0) + 1
+
+    # Top cases by completeness
+    top_cases = sorted(cases, key=lambda c: c.completeness_score, reverse=True)[:10]
+
+    db.close()
+    return {
+        "total_cases": len(cases),
+        "total_files": len(files),
+        "phase_coverage": phase_coverage,
+        "completeness_distribution": completeness_buckets,
+        "industries": industries,
+        "doc_types": doc_types,
+        "languages": languages,
+        "top_cases": [
+            {"brand_name": c.brand_name, "completeness": c.completeness_score, "files": c.total_files}
+            for c in top_cases
+        ],
+    }
+
+
 def _case_summary(c: CaseProject) -> dict:
     return {
         "id": c.id,
@@ -181,6 +344,7 @@ def _file_dict(f: CaseFile) -> dict:
     return {
         "id": f.id,
         "filename": f.filename,
+        "drive_file_id": f.drive_file_id,
         "doc_type": f.doc_type,
         "doc_label": f.doc_label,
         "phase": f.phase,

@@ -564,6 +564,28 @@ except ImportError:
     pass  # Module B not installed
 
 
+# ─── Module A → B Integration ───────────────────────────────
+
+@app.patch("/api/projects/{project_id}/approve")
+async def approve_project(project_id: int):
+    """Approve a project and sync to Module B knowledge base."""
+    with Session() as db:
+        project = db.query(Project).get(project_id)
+        if not project:
+            raise HTTPException(404, "Project not found")
+        project.status = ProjectStatus.APPROVED
+        db.commit()
+
+    # Sync to Module B knowledge base
+    try:
+        from module_b.integration import on_project_approved
+        integration_result = await on_project_approved(project_id)
+    except ImportError:
+        integration_result = {"status": "module_b_not_available"}
+
+    return {"approved": True, "integration": integration_result}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host=HOST, port=PORT)
