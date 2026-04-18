@@ -40,3 +40,10 @@ token.json
 credentials.json
 .venv/
 .pytest_cache/
+
+# Generated vector data
+case_vectors.npz
+case_vectors_meta.json
+
+# Runtime generated data
+backend/tasks/ingested_cases.json
