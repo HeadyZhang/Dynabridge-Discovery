@@ -795,6 +795,7 @@ uploaded research documents, build a comprehensive consumer analysis:
         "name": "Evocative 2-word name (e.g., Endurance First, Smart Shopper, Tender Caregiver, Polished Pro, Vivid Collector, Mindful Sustainer)",
         "tagline": "I want/need [what this segment prioritizes] — one sentence, first person, sounds like something they'd actually say",
         "size_pct": 27,
+        "persona_quote": "First-person statement that captures this segment's mindset — e.g., 'I compare prices carefully and focus on reliable products that meet my needs without paying extra for features I won't use.'",
         "narrative": "Meet the [Segment Name]: Picture a [specific role/person] [in a specific situation that reveals their relationship to the category]. [2-3 sentences about who they are: demographics, income, lifestyle]. [1-2 sentences about how they shop: channels, frequency, research behavior]. [1-2 sentences about what matters most and what frustrates them]. [1 sentence about what premium/quality means to them specifically]. For example: 'Meet the Endurance First Professional: Picture a Nurse Practitioner halfway through a 12-hour shift in a busy hospital ER. Her scrubs have been through patient lifts, medication rounds, and three coffee spills. She needs fabric that moves with her, breathes through pressure, and still looks professional at hour eleven.'",
         "demographics": {{
           "primary_role": "Most common role/profession",
@@ -811,6 +812,10 @@ uploaded research documents, build a comprehensive consumer analysis:
         "top_needs": ["Need 1 with percentage if available", "Need 2", "Need 3"],
         "pain_points": ["Pain point 1 with percentage if available", "Pain point 2", "Pain point 3"],
         "what_premium_means": "What this segment considers premium — e.g., fabric tech, design, durability",
+        "social_media": ["YouTube (78%)", "Instagram (65%)", "TikTok (45%)", "Facebook (38%)"],
+        "music_preferences": "e.g., 37% prefer Hip-Hop / Rap, 28% like R&B / Soul",
+        "car_brand_affinities": "e.g., 18% said Jeep best captures their style",
+        "lifestyle_values": ["e.g., Sustainability", "Convenience", "Community"],
         "lifestyle_signals": [
           {{"category": "Social Media", "detail": "e.g., 78% use YouTube more than any other platform"}},
           {{"category": "Music", "detail": "e.g., 37% prefer R&B / Soul music"}},

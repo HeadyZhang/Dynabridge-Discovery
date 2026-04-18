@@ -681,12 +681,59 @@ def _build_content_slide(prs, title, bullets, insight_text, template_idx=T_CONTE
         _set_text_preserve_format(shapes[0].text_frame, _truncate(title, 55))
     if len(shapes) >= 2:
         if isinstance(bullets, list):
-            bullets = [_truncate(b, 85) for b in bullets[:3]]
+            bullets = [_truncate(b, 180) for b in bullets[:3]]
         else:
-            bullets = [_truncate(bullets, 85)]
+            bullets = [_truncate(bullets, 180)]
         _set_text_preserve_format(shapes[1].text_frame, bullets)
     if len(shapes) >= 3:
-        _set_text_preserve_format(shapes[2].text_frame, _truncate(insight_text, 85))
+        _set_text_preserve_format(shapes[2].text_frame, _truncate(insight_text, 180))
+
+    return slide
+
+
+def _build_competitor_banner(prs, competitor_name):
+    """Clone an Overview Slide as a competitor banner divider.
+
+    Sample PPTs show "A closer look at [Brand Name]" as a breathing-room
+    divider before each competitor deep-dive.
+    """
+    slide = _clone_slide(prs, T_SECTION_COMPETITION)
+    shapes = _find_text_shapes(slide)
+    # The section header has text like "A closer look at the competition"
+    # Replace with the specific competitor name
+    for s in shapes:
+        text = s.text_frame.text.strip()
+        if "closer look" in text.lower() or "competition" in text.lower():
+            _set_text_preserve_format(s.text_frame, f"A closer look at\n{competitor_name}")
+        elif text.lower() in ("capabilities", "competition", "consumer"):
+            pass  # keep breadcrumb labels
+    return slide
+
+
+def _build_competitor_grid(prs, competitors, category=""):
+    """Build a competitor grid overview slide showing all competitor names.
+
+    Sample PPTs show "WE LOOKED AT MANY [CATEGORY] BRANDS" with a grid
+    of competitor logos/names before diving into individual analyses.
+    """
+    slide = _clone_slide(prs, T_CONTENT)
+    shapes = _find_text_shapes(slide)
+
+    cat_label = category.upper() if category else "CATEGORY"
+    title = f"FOCUSED REVIEW OF KEY {cat_label} BRANDS"
+
+    if len(shapes) >= 1:
+        _set_text_preserve_format(shapes[0].text_frame, _truncate(title, 60))
+    if len(shapes) >= 2:
+        comp_names = [c.get("name", "Competitor") for c in competitors[:10]]
+        subtitle = (
+            f"To ground our strategy work, we reviewed {len(comp_names)} key competitors: "
+            + ", ".join(comp_names)
+            + ". Each was evaluated on positioning, pricing, channel strategy, and consumer perception."
+        )
+        _set_text_preserve_format(shapes[1].text_frame, _truncate(subtitle, 300))
+    if len(shapes) >= 3:
+        _set_text_preserve_format(shapes[2].text_frame, "")
 
     return slide
 
@@ -707,11 +754,11 @@ def _build_competitor_slide(prs, name, positioning_bullets, learnings_bullets):
         _set_text_preserve_format(shapes[0].text_frame, _truncate(f"{name.upper()} — POSITIONING & KEY LEARNINGS", 60))
 
     if len(shapes) >= 2:
-        positioning_text = ["POSITIONING"] + [_truncate(b, 90) for b in positioning_bullets[:3]]
+        positioning_text = ["POSITIONING"] + [_truncate(b, 180) for b in positioning_bullets[:3]]
         _set_text_preserve_format(shapes[1].text_frame, positioning_text)
 
     if len(shapes) >= 3:
-        learnings_text = ["KEY LEARNINGS"] + [_truncate(b, 90) for b in learnings_bullets[:3]]
+        learnings_text = ["KEY LEARNINGS"] + [_truncate(b, 180) for b in learnings_bullets[:3]]
         _set_text_preserve_format(shapes[2].text_frame, learnings_text)
 
     return slide
@@ -760,7 +807,7 @@ def _build_summary_slide(prs, title, summary_text, template_idx=T_SUMMARY):
     if title_shape:
         _set_text_preserve_format(title_shape.text_frame, _truncate(title, 40))
     if body_shape:
-        _set_text_preserve_format(body_shape.text_frame, _truncate(summary_text, 260))
+        _set_text_preserve_format(body_shape.text_frame, _truncate(summary_text, 500))
 
     return slide
 
@@ -854,6 +901,12 @@ def _build_meet_segment(prs, segment):
     name = segment.get("name", "SEGMENT")
     tagline = segment.get("tagline", "")
     narrative = segment.get("narrative", "")
+    persona_quote = segment.get("persona_quote", "")
+
+    # Build enriched narrative with first-person quote (matching sample PPT pattern)
+    full_narrative = narrative
+    if persona_quote and persona_quote not in narrative:
+        full_narrative = f"{narrative}\n\n\"{persona_quote}\""
 
     # Find the shapes by content length pattern
     for s in shapes:
@@ -863,9 +916,9 @@ def _build_meet_segment(prs, segment):
         if text.isupper() and len(text) < 30:
             _set_text_preserve_format(s.text_frame, name.upper())
         elif len(text) < 80 and not text.isupper() and "Meet" not in text:
-            _set_text_preserve_format(s.text_frame, _truncate(tagline, 70))
+            _set_text_preserve_format(s.text_frame, _truncate(tagline, 100))
         elif len(text) > 80 or "Meet" in text:
-            _set_text_preserve_format(s.text_frame, _truncate(narrative, 500))
+            _set_text_preserve_format(s.text_frame, _truncate(full_narrative, 800))
 
     return slide
 
@@ -1088,11 +1141,166 @@ def _build_segment_closer_look(prs, segment, slide_num=1):
         )
         for idx, s in enumerate(bottom_shapes[:4]):
             if idx < len(lifestyle) and lifestyle[idx].get("detail"):
-                _set_text_preserve_format(s.text_frame, _truncate(lifestyle[idx]["detail"], 90))
+                _set_text_preserve_format(s.text_frame, _truncate(lifestyle[idx]["detail"], 150))
             else:
                 _set_text_preserve_format(s.text_frame, "")
 
         return slide
+
+
+def _build_segment_behavioral_summary(prs, segment):
+    """Build a 4-column behavioral summary slide for a segment.
+
+    Sample PPTs use 4 equal columns:
+      Social Media Usage | Purchase Drivers | Pain Points | Pre-Purchase Activities
+
+    Uses T_CONTENT template with structured multi-column text.
+    """
+    slide = _clone_slide(prs, T_CONTENT)
+    shapes = _find_text_shapes(slide)
+    name = segment.get("name", "SEGMENT")
+    mini = segment.get("mini_tables", {})
+
+    if len(shapes) >= 1:
+        _set_text_preserve_format(shapes[0].text_frame,
+            _truncate(f"{name.upper()} – BEHAVIORAL SUMMARY", 55))
+
+    # Build 4-column content
+    columns = []
+
+    # Social Media
+    social = segment.get("social_media", [])
+    if not social:
+        channels = segment.get("channels", [])
+        social = [str(c) for c in channels[:3]]
+    social_text = "SOCIAL MEDIA\n" + "\n".join(str(s)[:40] for s in social[:4])
+    columns.append(social_text)
+
+    # Purchase Drivers
+    drivers = mini.get("purchase_drivers", [])
+    if drivers:
+        driver_text = "PURCHASE DRIVERS\n" + "\n".join(
+            f"{d['item']} ({d['pct']}%)" for d in drivers[:4])
+    else:
+        motivations = segment.get("key_motivations", [])
+        driver_text = "KEY MOTIVATIONS\n" + "\n".join(str(m)[:40] for m in motivations[:4])
+    columns.append(driver_text)
+
+    # Pain Points
+    pains = mini.get("pain_points", [])
+    if pains:
+        pain_text = "PAIN POINTS\n" + "\n".join(
+            f"{p['item']} ({p['pct']}%)" for p in pains[:4])
+    else:
+        unmet = segment.get("unmet_needs", "")
+        pain_items = [s.strip() for s in unmet.split(".") if s.strip()][:4]
+        pain_text = "PAIN POINTS\n" + "\n".join(pain_items) if pain_items else "PAIN POINTS\n—"
+    columns.append(pain_text)
+
+    # Pre-Purchase
+    pre = mini.get("pre_purchase", [])
+    if pre:
+        pre_text = "PRE-PURCHASE\n" + "\n".join(
+            f"{p['item']} ({p['pct']}%)" for p in pre[:4])
+    else:
+        touchpoints = segment.get("media_touchpoints", [])
+        pre_text = "PRE-PURCHASE\n" + "\n".join(str(t)[:40] for t in touchpoints[:4])
+    columns.append(pre_text)
+
+    # Place into the bullet area as a combined block
+    combined = "\n\n".join(columns)
+    if len(shapes) >= 2:
+        _set_text_preserve_format(shapes[1].text_frame, _truncate(combined, 600))
+    if len(shapes) >= 3:
+        _set_text_preserve_format(shapes[2].text_frame, "")
+
+    return slide
+
+
+def _build_segment_social_media(prs, segment):
+    """Build a social media & lifestyle signals slide for a segment.
+
+    Sample PPTs show 4 lifestyle cards with social media platform usage,
+    music preferences, car brand affinities, and wishlist items.
+    Uses T_CLOSER_LOOK_3 (slide 56) template with 4 image slots + 4 text boxes.
+    """
+    slide = _clone_slide(prs, T_CLOSER_LOOK_3)
+    shapes = _find_text_shapes(slide)
+    name = segment.get("name", "SEGMENT")
+
+    # Update title
+    for s in shapes:
+        text = s.text_frame.text.strip()
+        if "CLOSER LOOK" in text.upper() or "ENDURANCE" in text.upper():
+            _set_text_preserve_format(s.text_frame,
+                _truncate(f"{name.upper()} – SOCIAL MEDIA & LIFESTYLE", 55))
+
+    # Build lifestyle signal cards from segment data
+    social = segment.get("social_media", [])
+    music = segment.get("music_preferences", "")
+    car_brand = segment.get("car_brand_affinities", "")
+    lifestyle_vals = segment.get("lifestyle_values", [])
+    wishlist = segment.get("wishlist", "")
+
+    cards = []
+    if social:
+        social_str = ", ".join(str(s) for s in social[:3]) if isinstance(social, list) else str(social)
+        cards.append(f"Top platforms: {social_str}")
+    if music:
+        cards.append(f"Music: {music}")
+    if car_brand:
+        cards.append(f"Car style: {car_brand}")
+    if lifestyle_vals:
+        vals = ", ".join(str(v) for v in lifestyle_vals[:3]) if isinstance(lifestyle_vals, list) else str(lifestyle_vals)
+        cards.append(f"Values: {vals}")
+    if wishlist:
+        cards.append(f"Wishlist: {wishlist}")
+
+    # Fall back to lifestyle_signals if available
+    if not cards:
+        lifestyle = segment.get("lifestyle_signals", [])
+        for ls in lifestyle[:4]:
+            if isinstance(ls, dict):
+                cards.append(ls.get("detail", ""))
+            else:
+                cards.append(str(ls))
+
+    while len(cards) < 4:
+        cards.append("")
+
+    # Find bottom text boxes and fill
+    bottom_shapes = sorted(
+        [s for s in shapes if s.top > 4500000 and s.text_frame.text.strip()
+         and "base" not in s.text_frame.text.lower()],
+        key=lambda s: s.left,
+    )
+    for idx, s in enumerate(bottom_shapes[:4]):
+        if idx < len(cards) and cards[idx]:
+            _set_text_preserve_format(s.text_frame, _truncate(cards[idx], 150))
+        else:
+            _set_text_preserve_format(s.text_frame, "")
+
+    # Replace images with social media icons if available
+    img_shapes = [s for s in slide.shapes if s.shape_type == 13]
+    icon_map = ["youtube_icon.png", "instagram_icon.png", "facebook_icon.png", "twitter_icon.png"]
+    for idx, img_s in enumerate(sorted(img_shapes, key=lambda s: s.left)[:4]):
+        if idx < len(icon_map):
+            icon_path = ASSETS_DIR / icon_map[idx]
+            if icon_path.exists():
+                # Replace image content
+                try:
+                    from pptx.opc.constants import RELATIONSHIP_TYPE as RT
+                    import io
+                    img_part, rId = slide.part.get_or_add_image_part(io.BytesIO(icon_path.read_bytes()))
+                    # Update the blip reference
+                    ns_a = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+                    ns_r = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+                    for blip in img_s._element.iter(f"{ns_a}blip"):
+                        blip.set(f"{ns_r}embed", rId)
+                except Exception:
+                    pass
+
+    return slide
 
 
 def _build_segment_profile(prs, segment):
@@ -1349,7 +1557,7 @@ def _build_why_not_segments(prs, deprioritized, brand_name):
     for dep in deprioritized[:3]:
         name = dep.get("name", "Segment")
         reason = dep.get("reason", "Not the right fit for now")
-        bullets.append(f"{name} ({dep.get('size_pct', '?')}%): {_truncate(reason, 65)}")
+        bullets.append(f"{name} ({dep.get('size_pct', '?')}%): {_truncate(reason, 180)}")
 
     if len(shapes) >= 2:
         _set_text_preserve_format(shapes[1].text_frame, bullets or ["All segments show potential"])
@@ -1489,7 +1697,7 @@ def _build_consumer_summary(prs, summary_text):
     if len(shapes) >= 1:
         _set_text_preserve_format(shapes[0].text_frame, "CONSUMER SUMMARY")
     if len(shapes) >= 2:
-        _set_text_preserve_format(shapes[1].text_frame, _truncate(summary_text, 260))
+        _set_text_preserve_format(shapes[1].text_frame, _truncate(summary_text, 500))
 
     return slide
 
@@ -1866,8 +2074,21 @@ async def generate_pptx(
                 _replace_slide_image(slide, img_pool.next_product())
             slide_meta.append({"type": "insight", "content": overview})
 
-        # Competitor deep dives
-        for competitor in comp.get("competitor_analyses", []):
+        # Competitor grid overview (all competitors at a glance)
+        competitor_list = comp.get("competitor_analyses", [])
+        if len(competitor_list) >= 2:
+            category = analysis.get("capabilities", {}).get("category", "")
+            _build_competitor_grid(prs, competitor_list, category)
+            slide_meta.append({"type": "competitor_grid", "content": {"count": len(competitor_list)}})
+
+        # Competitor deep dives — each gets a banner divider + positioning slide
+        for competitor in competitor_list:
+            comp_name = competitor.get("name", "Competitor")
+
+            # Banner divider (breathing room before each competitor)
+            _build_competitor_banner(prs, comp_name)
+            slide_meta.append({"type": "competitor_banner", "content": {"name": comp_name}})
+
             pos_bullets = [
                 f"{p['label']}: {p['detail']}"
                 for p in competitor.get("positioning", [])
@@ -1878,7 +2099,7 @@ async def generate_pptx(
             ]
             slide = _build_competitor_slide(
                 prs,
-                name=competitor.get("name", "Competitor"),
+                name=comp_name,
                 positioning_bullets=pos_bullets,
                 learnings_bullets=learn_bullets,
             )
@@ -2003,9 +2224,16 @@ async def generate_pptx(
             _build_focusing_segments(prs, segments)
             slide_meta.append({"type": "focusing", "content": {"segments": [s.get("name") for s in segments]}})
 
-            # Individual segment slides: 6-slide pattern per segment
-            # 1. Meet Segment  2. Respondent Profile  3. Closer Look 1
-            # 4. Closer Look 2  5. Challenges Table  6. Closer Look 3
+            # Individual segment slides: 8-slide pattern per segment
+            # (matching sample PPT structure discovered in analysis)
+            # 1. Meet Segment (full-bleed intro with persona quote)
+            # 2. Respondent Profile (demographics)
+            # 3. Closer Look 1 (premium/driver data with group shapes)
+            # 4. Closer Look 2 (brand awareness + verbatim quotes)
+            # 5. Behavioral Summary (4-column: social/drivers/pain/pre-purchase)
+            # 6. Challenges Table (pain points + unmet needs)
+            # 7. Social Media & Lifestyle (platform icons + lifestyle signals)
+            # 8. Closer Look 3 (4 lifestyle signal cards)
             for seg in segments[:5]:
                 slide = _build_meet_segment(prs, seg)
                 if img_pool.has_images():
@@ -2021,8 +2249,14 @@ async def generate_pptx(
                 _build_segment_closer_look(prs, seg, slide_num=2)
                 slide_meta.append({"type": "closer_look", "content": {"segment": seg.get("name"), "slide": 2}})
 
+                _build_segment_behavioral_summary(prs, seg)
+                slide_meta.append({"type": "behavioral_summary", "content": {"segment": seg.get("name")}})
+
                 _build_segment_challenges(prs, seg)
                 slide_meta.append({"type": "challenges", "content": {"segment": seg.get("name")}})
+
+                _build_segment_social_media(prs, seg)
+                slide_meta.append({"type": "social_media", "content": {"segment": seg.get("name")}})
 
                 slide = _build_segment_closer_look(prs, seg, slide_num=3)
                 # Replace all 4 lifestyle card images on closer_look_3

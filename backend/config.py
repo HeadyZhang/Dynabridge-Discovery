@@ -15,6 +15,8 @@ for d in [UPLOAD_DIR, OUTPUT_DIR, PREVIEW_DIR]:
 
 # API Keys
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN", "")
 
 # PPT Template
 MASTER_TEMPLATE = TEMPLATE_DIR / "brand_discovery_master.pptx"
