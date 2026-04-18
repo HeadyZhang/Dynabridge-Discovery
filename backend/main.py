@@ -556,6 +556,14 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+# ─── Module B: Knowledge Base routes ────────────────────────
+try:
+    from module_b.api import router as knowledge_router
+    app.include_router(knowledge_router)
+except ImportError:
+    pass  # Module B not installed
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host=HOST, port=PORT)

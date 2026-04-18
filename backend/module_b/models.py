@@ -16,9 +16,12 @@ class CaseProject(Base):
 
     id = Column(Integer, primary_key=True)
     brand_name = Column(String(255), nullable=False)
+    brand_name_zh = Column(String(255), default="")
     drive_folder_id = Column(String(100), nullable=False, unique=True)
     drive_folder_name = Column(String(500))
     drive_path = Column(String(1000))
+    industry = Column(String(200), default="")
+    sub_category = Column(String(200), default="")
     total_files = Column(Integer, default=0)
     total_size_mb = Column(Float, default=0.0)
     completeness_score = Column(Float, default=0.0)
@@ -26,6 +29,9 @@ class CaseProject(Base):
     has_strategy = Column(Integer, default=0)
     has_guidelines = Column(Integer, default=0)
     has_survey = Column(Integer, default=0)
+    # AI-generated metadata (JSON)
+    ai_tags_json = Column(Text, default="{}")
+    positioning_summary = Column(Text, default="")
     last_synced_at = Column(DateTime)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
@@ -51,6 +57,10 @@ class CaseFile(Base):
     phase = Column(String(50))          # discovery, strategy, design, etc.
     confidence = Column(Float, default=0.0)
     local_path = Column(String(1000))   # path if downloaded locally
+    extracted_text = Column(Text, default="")  # raw text from extractor
+    word_count = Column(Integer, default=0)
+    language_hint = Column(String(10), default="")
+    quality = Column(String(20), default="")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     case_project = relationship("CaseProject", back_populates="files")
