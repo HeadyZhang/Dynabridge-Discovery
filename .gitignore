@@ -35,3 +35,8 @@ Thumbs.db
 templates/*.pptx
 ~$*.pptx
 image/
+service_account.json
+token.json
+credentials.json
+.venv/
+.pytest_cache/
