@@ -116,6 +116,34 @@ export async function getDashboardData(): Promise<DashboardData> {
   return res.json();
 }
 
+export interface SurveyAnalytics {
+  total_survey_files: number;
+  cases_with_surveys: number;
+  survey_files: { brand_name: string; filename: string; doc_type: string; size_bytes: number; word_count: number }[];
+  questionnaire_count: number;
+  total_responses: number;
+  cross_tabulation_count: number;
+  engagement_count: number;
+  segment_count: number;
+  cases_with_survey_data: string[];
+}
+
+export async function getSurveyAnalytics(): Promise<SurveyAnalytics> {
+  const res = await fetch(`${API_BASE}/api/knowledge/survey-analytics`);
+  return res.json();
+}
+
+export interface InsightData {
+  total: number;
+  insights: { case_id: number; brand_name: string; industry: string; insight: string; type: string }[];
+}
+
+export async function getInsights(q?: string): Promise<InsightData> {
+  const params = q ? `?q=${encodeURIComponent(q)}` : "";
+  const res = await fetch(`${API_BASE}/api/knowledge/insights${params}`);
+  return res.json();
+}
+
 export function exportUrl(format: "csv" | "json" = "csv"): string {
   return `${API_BASE}/api/knowledge/export?format=${format}`;
 }

@@ -15,7 +15,10 @@ from sqlalchemy.orm import sessionmaker
 
 from config import DB_PATH
 from models import Base
-from module_b.models import CaseProject, CaseFile
+from module_b.models import (
+    CaseProject, CaseFile, DiscoveryEngagement, DiscoverySegment,
+    DiscoveryQuestionnaire, QuestionnaireResponse, CrossTabulation,
+)
 from module_b.search_index import FullTextIndex
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
@@ -34,8 +37,14 @@ def list_cases(
     industry: Optional[str] = Query(None),
     has_discovery: Optional[bool] = Query(None),
     has_strategy: Optional[bool] = Query(None),
+    challenge_type: Optional[str] = Query(None),
+    segment: Optional[str] = Query(None),
 ):
-    """List all case projects with optional filtering."""
+    """List all case projects with optional filtering.
+
+    Supports filtering by industry, phase flags, challenge type, and segment
+    (searches in ai_tags_json for challenge_type and segment).
+    """
     db = _get_db()
     q = db.query(CaseProject)
 
@@ -45,6 +54,10 @@ def list_cases(
         q = q.filter(CaseProject.has_discovery == (1 if has_discovery else 0))
     if has_strategy is not None:
         q = q.filter(CaseProject.has_strategy == (1 if has_strategy else 0))
+    if challenge_type:
+        q = q.filter(CaseProject.ai_tags_json.ilike(f"%{challenge_type}%"))
+    if segment:
+        q = q.filter(CaseProject.ai_tags_json.ilike(f"%{segment}%"))
 
     cases = q.order_by(CaseProject.brand_name).all()
     result = [_case_summary(c) for c in cases]
@@ -320,6 +333,132 @@ def get_dashboard_data():
             for c in top_cases
         ],
     }
+
+
+@router.get("/insights")
+def list_insights(
+    q: Optional[str] = Query(None),
+    industry: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """Strategic insight explorer — browse insights across all cases."""
+    db = _get_db()
+    query = db.query(CaseProject).filter(CaseProject.ai_tags_json.isnot(None))
+    if industry:
+        query = query.filter(CaseProject.industry.ilike(f"%{industry}%"))
+    cases = query.all()
+
+    all_insights = []
+    for case in cases:
+        try:
+            tags = json.loads(case.ai_tags_json) if case.ai_tags_json else {}
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        for insight in tags.get("key_insights", []):
+            all_insights.append({
+                "case_id": case.id,
+                "brand_name": case.brand_name,
+                "industry": case.industry or "",
+                "insight": insight,
+                "type": "insight",
+            })
+        for challenge in tags.get("core_challenges", []):
+            all_insights.append({
+                "case_id": case.id,
+                "brand_name": case.brand_name,
+                "industry": case.industry or "",
+                "insight": challenge,
+                "type": "challenge",
+            })
+
+    if q:
+        q_lower = q.lower()
+        all_insights = [i for i in all_insights if q_lower in i["insight"].lower()]
+
+    db.close()
+    return {"total": len(all_insights), "insights": all_insights[:limit]}
+
+
+@router.get("/survey-analytics")
+def survey_analytics():
+    """Questionnaire analytics overview — survey files, response data, cross-case stats."""
+    db = _get_db()
+
+    # Survey files from case library
+    survey_files = db.query(CaseFile).filter(
+        CaseFile.doc_type.in_(["survey", "consumer_insights"])
+    ).all()
+
+    cases_with_surveys = set()
+    file_list = []
+    for f in survey_files:
+        case = db.query(CaseProject).get(f.case_project_id)
+        brand = case.brand_name if case else "Unknown"
+        cases_with_surveys.add(brand)
+        file_list.append({
+            "brand_name": brand,
+            "filename": f.filename,
+            "doc_type": f.doc_type,
+            "size_bytes": f.size_bytes,
+            "word_count": f.word_count,
+        })
+
+    # Questionnaire records
+    questionnaires = db.query(DiscoveryQuestionnaire).all()
+    total_responses = db.query(QuestionnaireResponse).count()
+
+    # Cross-tabulations
+    cross_tabs = db.query(CrossTabulation).count()
+
+    # Engagements with segments
+    engagements = db.query(DiscoveryEngagement).count()
+    segments = db.query(DiscoverySegment).count()
+
+    db.close()
+    return {
+        "total_survey_files": len(survey_files),
+        "cases_with_surveys": len(cases_with_surveys),
+        "survey_files": file_list,
+        "questionnaire_count": len(questionnaires),
+        "total_responses": total_responses,
+        "cross_tabulation_count": cross_tabs,
+        "engagement_count": engagements,
+        "segment_count": segments,
+        "cases_with_survey_data": sorted(cases_with_surveys),
+    }
+
+
+@router.get("/engagements")
+def list_engagements():
+    """List all discovery engagements with their segments."""
+    db = _get_db()
+    engagements = db.query(DiscoveryEngagement).order_by(
+        DiscoveryEngagement.created_at.desc()
+    ).all()
+
+    result = []
+    for eng in engagements:
+        segments = db.query(DiscoverySegment).filter_by(engagement_id=eng.id).all()
+        result.append({
+            "id": eng.id,
+            "brand_name": eng.brand_name,
+            "industry": eng.industry,
+            "challenge_type": eng.challenge_type,
+            "status": eng.status,
+            "analysis_summary": eng.analysis_summary[:500] if eng.analysis_summary else "",
+            "segments": [
+                {
+                    "name_en": s.segment_name_en,
+                    "name_zh": s.segment_name_zh,
+                    "size_pct": s.size_percentage,
+                    "is_primary": bool(s.is_primary_target),
+                }
+                for s in segments
+            ],
+        })
+    db.close()
+    return result
 
 
 def _case_summary(c: CaseProject) -> dict:

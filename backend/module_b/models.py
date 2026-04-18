@@ -64,3 +64,95 @@ class CaseFile(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     case_project = relationship("CaseProject", back_populates="files")
+
+
+# ── Customer Discovery Database tables ────────────────────────
+
+class DiscoveryEngagement(Base):
+    """A brand discovery engagement record — links Module A projects to Module B."""
+    __tablename__ = "discovery_engagements"
+
+    id = Column(Integer, primary_key=True)
+    module_a_project_id = Column(Integer, nullable=True)  # FK conceptual, not enforced
+    case_project_id = Column(Integer, ForeignKey("case_projects.id"), nullable=True)
+    brand_name = Column(String(255), nullable=False)
+    brand_name_zh = Column(String(255), default="")
+    industry = Column(String(200), default="")
+    challenge_type = Column(String(200), default="")  # e.g. "market entry", "rebrand"
+    status = Column(String(50), default="active")  # active, completed, archived
+    analysis_summary = Column(Text, default="")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                        onupdate=lambda: datetime.now(timezone.utc))
+
+    segments = relationship("DiscoverySegment", back_populates="engagement",
+                            cascade="all, delete-orphan")
+    questionnaires = relationship("DiscoveryQuestionnaire", back_populates="engagement",
+                                  cascade="all, delete-orphan")
+
+
+class DiscoverySegment(Base):
+    """Consumer segment identified during a discovery engagement."""
+    __tablename__ = "discovery_segments"
+
+    id = Column(Integer, primary_key=True)
+    engagement_id = Column(Integer, ForeignKey("discovery_engagements.id"), nullable=False)
+    segment_name_en = Column(String(255), nullable=False)
+    segment_name_zh = Column(String(255), default="")
+    size_percentage = Column(Float, default=0.0)
+    description = Column(Text, default="")
+    profile_json = Column(Text, default="{}")  # demographics, behaviors, needs
+    is_primary_target = Column(Integer, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    engagement = relationship("DiscoveryEngagement", back_populates="segments")
+
+
+class DiscoveryQuestionnaire(Base):
+    """A survey/questionnaire design used in a discovery engagement."""
+    __tablename__ = "discovery_questionnaires"
+
+    id = Column(Integer, primary_key=True)
+    engagement_id = Column(Integer, ForeignKey("discovery_engagements.id"), nullable=False)
+    title = Column(String(500), nullable=False)
+    variant = Column(String(100), default="")  # e.g. "Draft V3", "CN version"
+    question_count = Column(Integer, default=0)
+    questions_json = Column(Text, default="[]")  # [{question, type, options, required}]
+    platform = Column(String(100), default="")  # e.g. "SurveyMonkey", "Google Forms"
+    response_count = Column(Integer, default=0)
+    source_file_id = Column(Integer, nullable=True)  # optional FK to case_files
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    engagement = relationship("DiscoveryEngagement", back_populates="questionnaires")
+    responses = relationship("QuestionnaireResponse", back_populates="questionnaire",
+                             cascade="all, delete-orphan")
+
+
+class QuestionnaireResponse(Base):
+    """Individual response to a questionnaire."""
+    __tablename__ = "questionnaire_responses"
+
+    id = Column(Integer, primary_key=True)
+    questionnaire_id = Column(Integer, ForeignKey("discovery_questionnaires.id"), nullable=False)
+    respondent_id = Column(String(100), default="")  # anonymized ID
+    answers_json = Column(Text, default="{}")  # {question_id: answer}
+    demographics_json = Column(Text, default="{}")  # {age, gender, location, ...}
+    submitted_at = Column(DateTime)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    questionnaire = relationship("DiscoveryQuestionnaire", back_populates="responses")
+
+
+class CrossTabulation(Base):
+    """Cross-tabulation analysis result from questionnaire data."""
+    __tablename__ = "cross_tabulations"
+
+    id = Column(Integer, primary_key=True)
+    questionnaire_id = Column(Integer, ForeignKey("discovery_questionnaires.id"), nullable=True)
+    engagement_id = Column(Integer, ForeignKey("discovery_engagements.id"), nullable=True)
+    dimension_a = Column(String(200), nullable=False)  # e.g. "age_group"
+    dimension_b = Column(String(200), nullable=False)  # e.g. "purchase_frequency"
+    result_json = Column(Text, default="{}")  # cross-tab matrix
+    statistical_significance = Column(Float, default=0.0)  # p-value
+    sample_size = Column(Integer, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

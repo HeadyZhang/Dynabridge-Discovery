@@ -9,12 +9,16 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart as RechartsPie, Pie, Cell, Legend,
 } from "recharts";
-import { getDashboardData, exportUrl, type DashboardData } from "@/lib/knowledge-api";
+import {
+  getDashboardData, getSurveyAnalytics, exportUrl,
+  type DashboardData, type SurveyAnalytics,
+} from "@/lib/knowledge-api";
 
 const COLORS = ["#E8652D", "#00A8B5", "#F09E72", "#585752", "#D6D3D1", "#8B6D52", "#D4B89C", "#A08B75"];
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [survey, setSurvey] = useState<SurveyAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,8 +27,12 @@ export default function DashboardPage() {
 
   const loadDashboard = async () => {
     try {
-      const result = await getDashboardData();
+      const [result, surveyResult] = await Promise.all([
+        getDashboardData(),
+        getSurveyAnalytics(),
+      ]);
       setData(result);
+      setSurvey(surveyResult);
     } catch {
       // silently handle
     } finally {
@@ -262,6 +270,85 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Survey Analytics Section */}
+        {survey && (
+          <div className="grid grid-cols-3 gap-4 mt-6">
+            <div className="bg-white rounded-xl border border-neutral-200 p-5">
+              <h2 className="text-sm font-medium text-neutral-700 mb-3">Survey Analytics</h2>
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-neutral-500">Survey Files</span>
+                  <span className="font-medium text-neutral-900">{survey.total_survey_files}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-neutral-500">Cases with Surveys</span>
+                  <span className="font-medium text-neutral-900">{survey.cases_with_surveys}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-neutral-500">Questionnaires</span>
+                  <span className="font-medium text-neutral-900">{survey.questionnaire_count}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-neutral-500">Total Responses</span>
+                  <span className="font-medium text-neutral-900">{survey.total_responses}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-neutral-500">Engagements</span>
+                  <span className="font-medium text-neutral-900">{survey.engagement_count}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-neutral-500">Consumer Segments</span>
+                  <span className="font-medium text-neutral-900">{survey.segment_count}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-span-2 bg-white rounded-xl border border-neutral-200 p-5">
+              <h2 className="text-sm font-medium text-neutral-700 mb-3">
+                Cases with Survey Data ({survey.cases_with_survey_data.length})
+              </h2>
+              {survey.cases_with_survey_data.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {survey.cases_with_survey_data.map((name) => (
+                    <span
+                      key={name}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700"
+                    >
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-neutral-400 py-4 text-center">
+                  No survey data ingested yet
+                </p>
+              )}
+              {survey.survey_files.length > 0 && (
+                <div className="mt-4 max-h-40 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-neutral-400 border-b border-neutral-100">
+                        <th className="text-left py-1.5">Brand</th>
+                        <th className="text-left py-1.5">File</th>
+                        <th className="text-left py-1.5">Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {survey.survey_files.slice(0, 20).map((f, i) => (
+                        <tr key={i} className="border-b border-neutral-50">
+                          <td className="py-1.5 text-neutral-600">{f.brand_name}</td>
+                          <td className="py-1.5 text-neutral-800 truncate max-w-[200px]">{f.filename}</td>
+                          <td className="py-1.5 text-neutral-500">{f.doc_type}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
