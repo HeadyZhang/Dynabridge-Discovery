@@ -384,14 +384,15 @@ async def _collect_via_web_search(
         from anthropic import Anthropic
         client = Anthropic(api_key=ANTHROPIC_API_KEY)
 
-        category_hint = " ".join((category_keywords or [])[:2])
-        prompt = f"""Search the web for "{brand_name}" products and find the best pages that contain product images.
-{f'Category context: {category_hint}' if category_hint else ''}
+        category_hint = " ".join((category_keywords or [])[:3])
+        prompt = f"""Search the web for "{brand_name}" {f'({category_hint})' if category_hint else ''} products and find the best pages that contain product images.
 
-I need PAGE URLs (not direct image URLs) where I can find high-quality product photos:
-1. {brand_name} Amazon product listing pages
-2. {brand_name} official product/collection pages
-3. Blog or review sites featuring {brand_name} products
+I need PAGE URLs (not direct image URLs) where I can find high-quality product and lifestyle photos of {brand_name} products{f' in the {category_hint} category' if category_hint else ''}:
+1. {brand_name} official website product/collection pages
+2. {brand_name} Amazon product listing pages
+3. Blog reviews or lifestyle features of {brand_name} products
+
+IMPORTANT: Only return pages specifically about {brand_name} products. Do NOT include pages about unrelated brands or categories.
 
 Return a JSON array of page URLs: ["https://...", "https://..."]
 Return 5-8 URLs. Return ONLY the JSON array."""
@@ -516,17 +517,43 @@ def infer_category_keywords(
         keywords.append(category)
 
     category_image_map = {
-        "scrubs": ["nurse hospital professional", "healthcare worker scrubs", "medical team modern", "doctor confident portrait", "hospital hallway clinical"],
+        # Drinkware / water bottles
+        "water bottle": ["water bottle outdoor hiking active", "insulated bottle lifestyle", "reusable bottle workout gym"],
+        "bottle": ["reusable water bottle lifestyle", "insulated bottle outdoors active", "drinkware modern design"],
+        "tumbler": ["insulated tumbler coffee lifestyle", "stainless tumbler travel commute", "tumbler daily carry"],
+        "drinkware": ["drinkware lifestyle hydration", "water bottle active outdoor", "tumbler modern minimal"],
+        "flask": ["insulated flask outdoor adventure", "water flask hiking travel", "flask hydration active"],
+        # Medical / healthcare
+        "scrubs": ["nurse hospital professional", "healthcare worker scrubs", "medical team modern"],
         "medical": ["healthcare professional", "medical team hospital", "nurse caring patient"],
+        # Baby / kids
         "baby": ["mother baby nursery", "parent infant care", "baby product lifestyle"],
+        # Home / cleaning
         "cleaning": ["clean home modern", "steam cleaning floor", "household cleaning product"],
         "water filter": ["clean water kitchen", "water purification home", "family drinking water"],
+        "candle": ["candle cozy home ambiance", "home fragrance lifestyle", "candle relaxation self care"],
+        "cookware": ["kitchen cookware modern", "cooking lifestyle gourmet", "kitchen product premium"],
+        "furniture": ["modern home interior", "furniture lifestyle living room", "home decor minimal"],
+        "mattress": ["bedroom comfort sleep", "mattress lifestyle rest", "bedroom modern cozy"],
+        # Fashion / apparel
         "bag": ["eco bag lifestyle", "sustainable fashion bag", "woman carrying bag urban"],
         "lingerie": ["confident woman fashion", "intimate apparel lifestyle", "woman self care"],
-        "skincare": ["skincare routine woman", "beauty product lifestyle", "woman glowing skin"],
         "apparel": ["fashion lifestyle model", "casual wear street style", "modern clothing brand"],
         "yoga": ["yoga practice woman", "fitness lifestyle mindful", "athleisure fashion"],
         "shoe": ["sneaker lifestyle urban", "athletic shoe running", "shoe fashion street"],
+        "athletic": ["athletic wear workout", "fitness apparel active", "sportswear lifestyle"],
+        # Beauty / personal care
+        "skincare": ["skincare routine woman", "beauty product lifestyle", "woman glowing skin"],
+        "haircare": ["hair care routine styling", "shampoo product lifestyle", "healthy hair beauty"],
+        "makeup": ["makeup beauty lifestyle", "cosmetics product flat lay", "beauty routine morning"],
+        # Tech / electronics
+        "headphone": ["headphone music lifestyle", "wireless earbuds commute", "audio tech modern"],
+        "speaker": ["bluetooth speaker outdoor", "speaker lifestyle music", "portable audio modern"],
+        "charger": ["tech gadget modern desk", "charging station minimal", "tech accessory lifestyle"],
+        # Outdoor / sports
+        "camping": ["camping outdoor adventure", "outdoor gear nature", "camping lifestyle equipment"],
+        "fitness": ["fitness gym workout", "exercise lifestyle active", "gym equipment modern"],
+        "running": ["running outdoor trail", "runner athlete lifestyle", "running shoes road"],
     }
 
     cat_lower = (category or "").lower()
@@ -541,10 +568,10 @@ def infer_category_keywords(
     if not keywords:
         keywords = [
             f"{brand_name} product lifestyle",
-            "business professional team",
-            "modern brand lifestyle",
-            "consumer product premium",
-            "professional workspace modern",
+            f"{brand_name} brand product photo",
+            "consumer product lifestyle premium",
+            "modern product design minimal",
+            "active lifestyle product photography",
         ]
 
     return keywords[:5]

@@ -592,14 +592,21 @@ def render_table(headers: list[str], rows: list[list[str]],
     return output_path
 
 
-def render_wordcloud(words: dict, output_path: Path = None,
+def render_wordcloud(words, output_path: Path = None,
                      size: tuple = None) -> Path:
     """Render a dense, visually compact word cloud from word frequencies.
 
     Args:
-        words: {"word": frequency, ...} — higher frequency = larger text
+        words: {"word": frequency, ...} or [{"text": "word", "weight": N}, ...] — higher frequency = larger text
     """
     from wordcloud import WordCloud
+
+    # Normalize list format to dict format
+    if isinstance(words, list):
+        words = {item.get("text", item.get("word", "")): item.get("weight", item.get("value", 1)) for item in words if isinstance(item, dict)}
+
+    if not isinstance(words, dict) or not words:
+        words = {"product": 50, "quality": 45, "design": 40, "value": 35, "durable": 30}
 
     if size is None:
         size = (3200, 2000)

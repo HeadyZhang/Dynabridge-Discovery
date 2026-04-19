@@ -150,7 +150,7 @@ export default function Home() {
     setActiveProjectId(project.id);
     setProjectId(project.id);
     setProjectName(project.name);
-    setBrandUrl(project.brand_url);
+    setBrandUrl(project.brand_url || "");
     setCompetitors(project.competitor_urls || []);
     setLanguage(project.language);
     setPhase((project.phase || "brand_reality") as Phase);

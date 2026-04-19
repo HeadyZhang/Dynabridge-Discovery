@@ -25,7 +25,7 @@ You follow DynaBridge's Discovery methodology — a 3-step process:
 ## Writing Style (match this exactly)
 
 SLIDE TITLES: Must be ALL CAPS, descriptive, and opinionated — they state a finding, not a topic.
-  GOOD: "HOW COZYFIT WAS BUILT: EXECUTION FIRST"
+  GOOD: "HOW [BRAND] WAS BUILT: EXECUTION FIRST"
   GOOD: "A FOUNDER-LED, AMAZON-NATIVE BRAND"
   GOOD: "QUALITY IS A SYSTEM, NOT A CLAIM"
   GOOD: "BUILT TO WIN WHERE OTHERS UNDER-INVEST"
@@ -39,8 +39,8 @@ There are TWO content formats — match the right one to each field:
 ### Format A — CONTENT SLIDES (capabilities, competition, challenges)
 BULLETS: 3 bullets per slide. Each bullet is a FULL PARAGRAPH: 2-4 sentences, rich with specific
   evidence from the data (prices, percentages, product names, channel details).
-  GOOD: "CozyFit prioritized getting the product right, pricing competitively, and moving fast on Amazon. The founder-led approach focused on product iteration and review velocity rather than brand definition. This built strong initial traction but deferred the harder work of establishing a clear brand identity." (3 sentences)
-  BAD: "CozyFit prioritized product quality and pricing." (too thin — no evidence, no depth)
+  GOOD: "[Brand] prioritized getting the product right, pricing competitively, and moving fast on Amazon. The founder-led approach focused on product iteration and review velocity rather than brand definition. This built strong initial traction but deferred the harder work of establishing a clear brand identity." (3 sentences)
+  BAD: "[Brand] prioritized product quality and pricing." (too thin — no evidence, no depth)
 
 ### Format B — COMPETITOR POSITIONING & KEY LEARNINGS
 Each statement uses BOLD-LABEL: DETAIL format. The label is a 3-5 word theme, the detail is 1-2 sentences.
@@ -50,8 +50,8 @@ Each statement uses BOLD-LABEL: DETAIL format. The label is a 3-5 word theme, th
 
 ### Format C — CHART SLIDES & INSIGHT BARS
 Short text for chart titles and insight bars. MAX 80 characters, 1 sentence.
-  GOOD: "CozyFit has built a product — but not yet a brand." (51 chars)
-  GOOD: "They buy scrubs like they practice medicine — with evidence." (60 chars)
+  GOOD: "[Brand] has built a product — but not yet a brand." (51 chars)
+  GOOD: "They buy with evidence, not emotion — performance is the currency." (65 chars)
   BAD: "The brand has both strengths and weaknesses." (too generic)
 
 SUMMARY PARAGRAPHS: 3-5 sentences, MAX 350 characters total. Write as connected prose, not bullets.
@@ -79,11 +79,11 @@ COUNT YOUR CHARACTERS. Any text exceeding these limits will be truncated and loo
 
 EXAMPLE 1 (Capabilities — Format A):
 {
-  "title": "HOW COZYFIT WAS BUILT: EXECUTION FIRST",
+  "title": "HOW [BRAND] WAS BUILT: EXECUTION FIRST",
   "bullets": [
-    "CozyFit prioritized getting the product right, pricing competitively, and moving fast on Amazon. The founder-led approach focused on product iteration and review velocity rather than brand definition.",
+    "[Brand] prioritized getting the product right, pricing competitively, and moving fast on Amazon. The founder-led approach focused on product iteration and review velocity rather than brand definition.",
     "Amazon-first launch built strong initial traction through product quality and competitive pricing. Early success was driven by execution discipline, not brand storytelling or emotional positioning.",
-    "CozyFit's early success was built on product and channel execution — but execution alone won't sustain growth. Without brand definition, the path from product to brand remains unclear."
+    "[Brand]'s early success was built on product and channel execution — but execution alone won't sustain growth. Without brand definition, the path from product to brand remains unclear."
   ],
   "insight": "Execution-driven success — but execution alone won't sustain growth.",
   "has_image": true
@@ -93,11 +93,11 @@ EXAMPLE 2 (Capabilities — Format A):
 {
   "title": "A FUNCTIONAL, FEATURE-LED, VALUE-FOCUSED OFFER",
   "bullets": [
-    "Across channels, CozyFit emphasizes comfort, fit, features, and affordability over emotional storytelling or identity. Product pages communicate stretch, pockets, and fabric performance — functional language that invites direct comparison.",
-    "Product fundamentals are competitive for CozyFit's price tier. Fabrics, construction, and key features match or exceed competitors at similar price points, but the brand lacks a material story or signature innovation to anchor premium perception.",
-    "Easy to compare but follows category norms — CozyFit presents as a practical solution rather than a differentiated brand. Without a clear reason to choose CozyFit specifically, customers default to price and availability."
+    "Across channels, [Brand] emphasizes functional benefits and affordability over emotional storytelling or identity. Product pages communicate specs, features, and performance — functional language that invites direct comparison.",
+    "Product fundamentals are competitive for [Brand]'s price tier. Key features match or exceed competitors at similar price points, but the brand lacks a signature innovation or material story to anchor premium perception.",
+    "Easy to compare but follows category norms — [Brand] presents as a practical solution rather than a differentiated brand. Without a clear reason to choose [Brand] specifically, customers default to price and availability."
   ],
-  "insight": "CozyFit presents as a practical solution, not a differentiated brand.",
+  "insight": "[Brand] presents as a practical solution, not a differentiated brand.",
   "has_image": true
 }
 
@@ -119,17 +119,17 @@ EXAMPLE 3 (Competition — Format B, for POSITIONING field):
 
 EXAMPLE 4 (Segment — Consumer narrative):
 {
-  "name": "Endurance First",
-  "tagline": "I need scrubs that perform during long, demanding shifts — durability and comfort are non-negotiable",
+  "name": "Performance Seekers",
+  "tagline": "I need gear that performs when it matters — reliability and quality are non-negotiable",
   "size_pct": 27,
-  "narrative": "Meet the Endurance First Professional: Picture a Nurse Practitioner halfway through a 12-hour shift in a busy hospital ER. Her scrubs have been through patient lifts, medication rounds, and three coffee spills. She needs fabric that moves with her, breathes through pressure, and still looks professional at hour eleven. This segment represents 27% of the market and skews toward experienced healthcare workers in high-acuity settings. They spend the most on scrubs ($180+ annually) and set the performance standard for the entire category. For them, 'premium' means evidence of superior fabric technology and construction that survives industrial laundering. They don't chase trends — they chase proof.",
+  "narrative": "Meet the Performance Seeker: Picture someone who tests products to their limits in real daily use. They've tried the alternatives and know exactly what fails first. This segment represents 27% of the market and skews toward experienced users in demanding contexts. They spend the most annually and set the performance standard for the entire category. For them, 'premium' means evidence of superior materials and construction — proof, not marketing. They don't chase trends — they chase proof.",
   "demographics": {
-    "primary_role": "Nurse Practitioner / RN in hospital settings",
+    "primary_role": "Active professional in demanding daily routines",
     "age_skew": "52% Millennial, 29% Gen X",
     "income": "51% upper-middle income ($75K-$149K)",
-    "gender_split": "73% female, 27% male"
+    "gender_split": "55% female, 45% male"
   },
-  "what_premium_means": "Evidence of superior fabric technology (42%) and premium stitching/construction (38%) — proof, not marketing"
+  "what_premium_means": "Evidence of superior materials (42%) and build quality (38%) — proof, not marketing"
 }
 
 EXAMPLE 5 (De-prioritized segment reasoning):
@@ -296,7 +296,7 @@ write it as a connected narrative paragraph.
         "insight": "Strategic reframe — how addressing this challenge unlocks the next stage"
       }}
     ],
-    "capabilities_summary": "A flowing paragraph of 3-5 sentences. Follow this arc: [1] Name the brand and state its core execution strength with evidence. [2] Acknowledge the gap — what it has NOT yet built (brand, perception, positioning). [3] End with a forward-looking statement. Example: 'CozyFit is an execution-driven brand with competitive products and strong Amazon performance, now facing the need to clarify its naming and brand structure—including the role of Cozy Scrubs—to support long-term growth.'",
+    "capabilities_summary": "A flowing paragraph of 3-5 sentences. Follow this arc: [1] Name the brand and state its core execution strength with evidence. [2] Acknowledge the gap — what it has NOT yet built (brand, perception, positioning). [3] End with a forward-looking statement. Example: '[Brand] is an execution-driven brand with competitive products and strong Amazon performance, now facing the need to clarify its brand positioning to support long-term growth.'",
     "claims_vs_perception": {{
       "brand_claims": ["Specific claim the brand makes about itself — quote from website if possible", "Another specific claim"],
       "customer_perception": ["What customers actually say — quote or paraphrase from reviews", "Another customer perception"],
@@ -513,7 +513,7 @@ uploaded research documents, build a comprehensive consumer analysis:
      GOOD: "Endurance First", "Polished Pro", "Tender Caregiver", "Vivid Collector"
      BAD: "Segment 1", "Price Sensitive", "Quality Buyer" (too generic)
    - A first-person tagline that sounds like something the person would actually say
-     GOOD: "I need scrubs that perform during long, demanding shifts"
+     GOOD: "I need products that perform when it matters most"
      BAD: "This segment values quality and comfort" (third-person, generic)
    - A "Meet the [Segment]" narrative paragraph (5-7 sentences). START with a vivid character
      scene: "Meet the [Name]: Picture a [specific role] halfway through a [specific situation]..."
@@ -796,7 +796,7 @@ uploaded research documents, build a comprehensive consumer analysis:
         "tagline": "I want/need [what this segment prioritizes] — one sentence, first person, sounds like something they'd actually say",
         "size_pct": 27,
         "persona_quote": "First-person statement that captures this segment's mindset — e.g., 'I compare prices carefully and focus on reliable products that meet my needs without paying extra for features I won't use.'",
-        "narrative": "Meet the [Segment Name]: Picture a [specific role/person] [in a specific situation that reveals their relationship to the category]. [2-3 sentences about who they are: demographics, income, lifestyle]. [1-2 sentences about how they shop: channels, frequency, research behavior]. [1-2 sentences about what matters most and what frustrates them]. [1 sentence about what premium/quality means to them specifically]. For example: 'Meet the Endurance First Professional: Picture a Nurse Practitioner halfway through a 12-hour shift in a busy hospital ER. Her scrubs have been through patient lifts, medication rounds, and three coffee spills. She needs fabric that moves with her, breathes through pressure, and still looks professional at hour eleven.'",
+        "narrative": "Meet the [Segment Name]: Picture a [specific role/person] [in a specific situation that reveals their relationship to the category]. [2-3 sentences about who they are: demographics, income, lifestyle]. [1-2 sentences about how they shop: channels, frequency, research behavior]. [1-2 sentences about what matters most and what frustrates them]. [1 sentence about what premium/quality means to them specifically]. For example: 'Meet the Performance Seeker: Picture someone testing the product to its limits in their daily routine. They've tried the alternatives and know exactly what fails first. They need something that keeps up with their demands without compromise.'",
         "demographics": {{
           "primary_role": "Most common role/profession",
           "age_skew": "e.g., 58% Millennial, 23% Gen X",
@@ -851,7 +851,7 @@ uploaded research documents, build a comprehensive consumer analysis:
       }}
     ],
     "competitive_fares": {{
-      "brand_strengths": "What each leading competitor wins on — e.g., 'Lululemon → Lifestyle, FIGS → Premium, Cherokee → Heritage'",
+      "brand_strengths": "What each leading competitor wins on — e.g., 'Brand A → Innovation, Brand B → Heritage, Brand C → Value'",
       "category_compromise": "What the category forces buyers to compromise on — no brand combines [X] and [Y]",
       "strategic_opportunity": "The specific combination of strengths no brand currently owns",
       "strategic_question": "What would it look like to build a brand that didn't force that compromise?"
@@ -872,9 +872,9 @@ uploaded research documents, build a comprehensive consumer analysis:
   }},
 
   "summary_and_next_steps": {{
-    "capabilities_column": "2-3 sentence paragraph summarizing Step 1 findings. Name the brand and its core strength. State the key gap. Example: 'CozyFit is an execution-driven brand with competitive products and strong Amazon performance, now facing the need to clarify its naming and brand structure to support long-term growth.'",
-    "competition_column": "2-3 sentence paragraph summarizing Step 2 findings. Name specific competitors and their roles. State the white space. Example: 'The scrubs market is well established, with leading brands succeeding by owning a clear and focused role—such as lifestyle identity, medical authority, or comfort—rather than trying to compete across everything at once.'",
-    "consumer_column": "2-3 sentence paragraph summarizing Step 3 findings. Name the target segment and why they matter. Example: 'Endurance First professionals spend the most, set the highest performance standards, and define what quality means in scrubs—making them the most valuable and influential segment in the market.'",
+    "capabilities_column": "2-3 sentence paragraph summarizing Step 1 findings. Name the brand and its core strength. State the key gap. Example: '[Brand] is an execution-driven brand with competitive products and strong channel performance, now facing the need to clarify its brand positioning to support long-term growth.'",
+    "competition_column": "2-3 sentence paragraph summarizing Step 2 findings. Name specific competitors and their roles. State the white space. Example: 'The market is well established, with leading brands succeeding by owning a clear and focused role—such as innovation, heritage, or value—rather than trying to compete across everything at once.'",
+    "consumer_column": "2-3 sentence paragraph summarizing Step 3 findings. Name the target segment and why they matter. Example: 'The primary segment spends the most, sets the highest performance standards, and defines what quality means in the category—making them the most valuable and influential audience.'",
     "closing_insight": "1-2 sentence forward-looking statement connecting all three pillars. Example: 'Building on these insights, we will define a clear and differentiated brand position—one that resonates with its most demanding customers and scales credibly across the broader market.'"
   }},
 
@@ -904,7 +904,7 @@ CRITICAL RULES:
 - All summary fields must be flowing paragraphs connecting strength → gap → next step.
 - deprioritized_segments: for EACH non-primary segment, state the specific strategic risk
   (e.g., "Promotion-driven, competing here risks compressing margins and weakening premium positioning")
-- competitive_fares must name specific competitors and what they win on (e.g., "Lululemon → Lifestyle, FIGS → Premium")
+- competitive_fares must name specific competitors and what they win on (e.g., "Brand A → Innovation, Brand B → Heritage")
 - Generate 15-20 charts organized in 4 sections (real cases average 22-29 chart slides):
   * Demographics (4-5): generation vbar, gender+ethnicity dual, income hbar, social media hbar
   * Shopping Habits (5-7): purchase frequency+spend dual, channels hbar, occasions hbar, pre-purchase hbar
@@ -973,6 +973,8 @@ async def analyze_brand(
             date=date_str,
         )
         p1_result = _call_claude(p1_prompt, max_tokens=8000)
+        print(f"[analyzer] Phase 1 complete. Keys: {list(p1_result.keys()) if isinstance(p1_result, dict) else 'not dict'}")
+        await asyncio.sleep(5)  # Brief cooldown between API calls
 
         # Phase 2: Competition (feed Phase 1 summary as context)
         p1_context = ""
@@ -1080,7 +1082,7 @@ CRITICAL RULES:
   * Evocative 2-word name (GOOD: "Endurance First", "Vivid Collector", "Tender Caregiver")
   * First-person tagline that sounds authentic, not corporate
   * "Meet the [Name]" narrative (5-7 sentences) OPENING with a vivid character scene
-    Example: "Meet the Endurance First Professional: Picture a Nurse Practitioner halfway through a 12-hour shift in a busy hospital ER..."
+    Example: "Meet the Performance Seeker: Picture someone testing the product to its limits in daily use..."
   * Specific what_premium_means (cite attributes + percentages)
   * 4 lifestyle_signals for cultural profiling (social media, music, car brand, key stat)
   * mini_tables with item+pct data for chart rendering
@@ -1088,10 +1090,20 @@ CRITICAL RULES:
   strategic risk (e.g., "Promotion-driven, competing here risks compressing margins and weakening
   premium positioning. Too narrow to build long-term brand authority around.")
 - MUST include "competitive_fares" object: brand_strengths (name competitors and what they win on,
-  e.g., "Lululemon → Lifestyle, FIGS → Premium, Cherokee → Heritage"), category_compromise,
+  e.g., "Brand A → Innovation, Brand B → Heritage, Brand C → Value"), category_compromise,
   strategic_opportunity, strategic_question.
 - Output ONLY JSON."""
-        p3_result = _call_claude(consumer_only_prompt, max_tokens=10000)
+        p3_result = _call_claude(consumer_only_prompt, max_tokens=16000)
+
+        # Debug: log what Phase 3 returned
+        if isinstance(p3_result, dict):
+            p3_keys = list(p3_result.keys())
+            consumer_keys = list(p3_result.get("consumer", {}).keys()) if isinstance(p3_result.get("consumer"), dict) else "not a dict"
+            print(f"[analyzer] Phase 3 keys: {p3_keys}, consumer keys: {consumer_keys}")
+            if "raw_analysis" in p3_result:
+                print(f"[analyzer] Phase 3 JSON parse FAILED. Raw text (first 500 chars): {p3_result['raw_analysis'][:500]}")
+        else:
+            print(f"[analyzer] Phase 3 returned non-dict: {type(p3_result)}")
 
         # Merge all three phases
         merged = {"brand_name": brand_name, "date": date_str}
@@ -1398,16 +1410,16 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
         "product_fundamentals": {
             "title": f"PRODUCT FUNDAMENTALS ARE STRONG",
             "bullets": [
-                f"{bn}'s fabric tech — 4-way stretch, moisture-wicking — matches premium competitors at lower prices.",
-                "Competitive features: 5-7 pockets, jogger pants, modern tops, growing color range.",
-                "Core categories covered (tops, pants, jackets) but no accessories — limiting loyalty drivers.",
+                f"{bn}'s core technology matches premium competitors at lower prices.",
+                "Competitive features across the product range with growing variety.",
+                "Core categories covered but no accessories ecosystem — limiting loyalty drivers.",
             ],
             "insight": f"The product is {bn}'s strongest asset — competitive enough for a premium position.",
         },
         "pricing_position": {
             "title": f"PRICE-PERFORMANCE DEFINES {BN}'S POSITION",
             "bullets": [
-                f"{bn} at $28-$42/piece sits below FIGS ($38-$90) with comparable performance. Strong value.",
+                f"{bn} sits below premium competitors with comparable performance. Strong value proposition.",
                 "Promotional language (deals, bundles) anchors the brand in accessible tier, not premium.",
                 "Drives volume but limits premium perception. Moving up requires brand story, not just price.",
             ],
@@ -1427,7 +1439,7 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                 "title": f"THE {BN} NAME CREATES A CHALLENGE",
                 "bullets": [
                     "The name signals comfort but may not convey professional credibility or performance.",
-                    "FIGS and Cherokee carry clear positioning — a comfort name risks pigeonholing.",
+                    "Leading competitors carry clear positioning — a generic name risks pigeonholing.",
                     "The name shapes Amazon search impressions and CTR — structural, not cosmetic.",
                 ],
                 "insight": "A brand name is the first promise — and it may be making the wrong one.",
@@ -1436,7 +1448,7 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                 "title": "BRAND NARRATIVE AND EMOTIONAL CONNECTION ABSENT",
                 "bullets": [
                     "No origin story or mission messaging. The brand says what it sells, not why.",
-                    "FIGS builds community, Cherokee has heritage. Even value brands tell a story.",
+                    "Top competitors build community and heritage. Even value brands tell a story.",
                     f"Without narrative, {bn} competes on features and price — most vulnerable position.",
                 ],
                 "insight": "A brand without a story is a commodity — or a canvas waiting to be defined.",
@@ -1459,7 +1471,7 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
         ),
         "claims_vs_perception": {
             "brand_claims": [
-                "Premium comfort and stretch for healthcare professionals",
+                "Premium quality and design for active consumers",
                 "High-quality fabric technology at accessible prices",
             ],
             "customer_perception": [
@@ -1489,33 +1501,33 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
     # Add competition for market_structure and full
     result["competition"] = {
         "market_overview": {
-            "title": "A MATURE, WELL-ESTABLISHED MEDICAL APPAREL MARKET",
-            "competitor_names": ["FIGS", "Cherokee", "Carhartt", "Med Couture", "Healing Hands", "Dickies", "Jaanuu", "Barco", "WonderWink", "Dagacci"],
+            "title": "A MATURE, WELL-ESTABLISHED CONSUMER PRODUCTS MARKET",
+            "competitor_names": ["Competitor A", "Competitor B", "Competitor C", "Competitor D", "Competitor E", "Competitor F", "Competitor G", "Competitor H", "Competitor I", "Competitor J"],
             "bullets": [
-                "US scrubs market exceeds $10B with clear roles: premium (FIGS), heritage (Cherokee), fashion (Med Couture).",
+                "Market exceeds $10B with clear roles: premium leaders, heritage brands, and value challengers.",
                 "Key shifts: wholesale to DTC, Amazon as discovery channel, demand for modern fits and athletic silhouettes.",
                 f"Top brands own a clear market role. {bn} competes on features and price — no distinct brand identity yet.",
             ],
             "insight": "Winning brands own a clear role — not by trying to be everything to everyone.",
         },
-        "focused_competitors": ["FIGS", "Cherokee", "Carhartt", "Med Couture", "Healing Hands", "Jaanuu"],
+        "focused_competitors": ["Competitor A", "Competitor B", "Competitor C", "Competitor D", "Competitor E", "Competitor G"],
         "competitor_analyses": [
             {
-                "name": "FIGS",
-                "banner_description": "Premium lifestyle pioneer proving scrubs buyers will pay for brand",
+                "name": "Competitor A",
+                "banner_description": "Premium lifestyle pioneer proving products buyers will pay for brand",
                 "positioning": [
-                    {"label": "Target Audience", "detail": "Young pros (25-40) who see scrubs as lifestyle. Skews female, urban."},
+                    {"label": "Target Audience", "detail": "Young pros (25-40) who see products as lifestyle. Skews female, urban."},
                     {"label": "Price Point", "detail": "$38-$90/piece, firmly premium. Price signals quality."},
-                    {"label": "Key Differentiator", "detail": "Created fashion-forward medical apparel. Strong DTC + community."},
+                    {"label": "Key Differentiator", "detail": "Created fashion-forward category products. Strong DTC + community."},
                 ],
                 "key_learnings": [
-                    {"label": "Brand-led growth works", "detail": "Proved scrubs buyers pay premium for brand, not just function."},
+                    {"label": "Brand-led growth works", "detail": "Proved products buyers pay premium for brand, not just function."},
                     {"label": "Ambassador model scales", "detail": "Influencer program drives acquisition. Community = switching costs."},
-                    {"label": "Premium fatigue", "detail": "Some buyers seek FIGS quality at lower prices. Territory is open."},
+                    {"label": "Premium fatigue", "detail": "Some buyers seek premium quality at lower prices. Territory is open."},
                 ],
             },
             {
-                "name": "Cherokee",
+                "name": "Competitor B",
                 "banner_description": "Heritage authority — decades of trust, slow to modernize",
                 "positioning": [
                     {"label": "Target Audience", "detail": "Broad workforce, value-conscious. Skews older, less brand-sensitive."},
@@ -1529,24 +1541,24 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                 ],
             },
             {
-                "name": "Carhartt",
-                "banner_description": "Durability icon crossing from workwear into healthcare",
+                "name": "Competitor C",
+                "banner_description": "Durability icon crossing from industrial into consumer market",
                 "positioning": [
                     {"label": "Target Audience", "detail": "Workers who value 'hard work' culture. Strong male appeal."},
                     {"label": "Price Point", "detail": "$25-$55/piece, mid-to-premium. Heritage brand pricing."},
-                    {"label": "Key Differentiator", "detail": "Iconic 'built to last' credibility transfers to scrubs."},
+                    {"label": "Key Differentiator", "detail": "Iconic 'built to last' credibility transfers to products."},
                 ],
                 "key_learnings": [
                     {"label": "Brand transfer works", "detail": "Adjacent category credibility creates instant trust."},
-                    {"label": "Limited depth", "detail": "Narrower range — scrubs are an extension, not core business."},
-                    {"label": "Gender gap", "detail": "Masculine brand limits appeal to 70% female scrubs market."},
+                    {"label": "Limited depth", "detail": "Narrower range — products are an extension, not core business."},
+                    {"label": "Gender gap", "detail": "Masculine brand limits appeal to 70% female consumer base."},
                 ],
             },
             {
-                "name": "Med Couture",
-                "banner_description": "Fashion-forward scrubs with modern fits and bold patterns",
+                "name": "Competitor D",
+                "banner_description": "Fashion-forward products with modern fits and bold patterns",
                 "positioning": [
-                    {"label": "Target Audience", "detail": "Style-conscious pros wanting good-looking scrubs. Young, female."},
+                    {"label": "Target Audience", "detail": "Style-conscious pros wanting good-looking products. Young, female."},
                     {"label": "Price Point", "detail": "$30-$55/piece, mid-to-premium for design quality."},
                     {"label": "Key Differentiator", "detail": "Bold prints, modern silhouettes, trend-responsive collections."},
                 ],
@@ -1559,10 +1571,10 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
         ],
         "landscape_summary": {
             "market_roles": [
-                {"role": "Premium Lifestyle", "brands": ["FIGS", "Jaanuu"], "description": "Brand-led, DTC, aspirational. Highest prices + loyalty."},
-                {"role": "Heritage Authority", "brands": ["Cherokee", "Dickies"], "description": "Decades of trust, wide distribution, but not modern."},
-                {"role": "Performance Crossover", "brands": ["Carhartt"], "description": "Adjacent category equity. Durable but limited depth."},
-                {"role": "Fashion-Forward", "brands": ["Med Couture", "Healing Hands"], "description": "Style-first with modern fits and bold patterns."},
+                {"role": "Premium Lifestyle", "brands": ["Competitor A", "Competitor G"], "description": "Brand-led, DTC, aspirational. Highest prices + loyalty."},
+                {"role": "Heritage Authority", "brands": ["Competitor B", "Competitor F"], "description": "Decades of trust, wide distribution, but not modern."},
+                {"role": "Performance Crossover", "brands": ["Competitor C"], "description": "Adjacent category equity. Durable but limited depth."},
+                {"role": "Fashion-Forward", "brands": ["Competitor D", "Competitor E"], "description": "Style-first with modern fits and bold patterns."},
             ],
             "white_space": f"No brand owns 'real performance at accessible price.' {bn}'s fundamentals could fill this gap with a clear brand story.",
             "category_norms": [
@@ -1572,7 +1584,7 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
             ],
         },
         "competition_summary": (
-            f"Leading scrubs brands win by owning a clear role — lifestyle, heritage, durability, or style. "
+            f"Leading products brands win by owning a clear role — lifestyle, heritage, durability, or style. "
             f"The white space for {bn} is premium product performance at accessible pricing. "
             "Claiming this requires a defined brand strategy, target audience, and consistent execution."
         ),
@@ -1583,11 +1595,11 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
 
     # Add consumer for full
     result["consumer"] = {
-        "overview": "Healthcare professionals who purchase their own scrubs represent a diverse but segmentable market. Primarily female (70%), Millennial-dominated (55%), and increasingly willing to invest in quality scrubs — 88% agree they'd pay more for scrubs that clearly deliver on what matters to them.",
+        "overview": "Consumers who actively research and purchase in this category represent a diverse but segmentable market. Primarily female (70%), Millennial-dominated (55%), and increasingly willing to invest in quality products — 88% agree they'd pay more for products that clearly deliver on what matters to them.",
         "research_approach": [
             {"label": "Format", "detail": "Review analysis + e-commerce data mining + secondary research"},
             {"label": "Data Sources", "detail": "Amazon reviews, brand website content, competitor listings, industry reports"},
-            {"label": "Participants", "detail": "Healthcare professionals: nurses, medical assistants, technicians, physicians; primary/shared purchase decision-makers"},
+            {"label": "Participants", "detail": "Active consumers who regularly purchase and use products in this category; primary purchase decision-makers"},
             {"label": "Analysis", "detail": "Sentiment analysis, theme extraction, behavioral clustering, competitive benchmarking"},
             {"label": "Timing", "detail": "APRIL 2026"},
         ],
@@ -1629,24 +1641,24 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
             {
                 "chart_type": "dual",
                 "title": "PURCHASE FREQUENCY AND ANNUAL SPEND",
-                "subtitle": "How often and how much respondents spend on scrubs",
+                "subtitle": "How often and how much respondents spend on products",
                 "left_type": "donut", "left_title": "Purchase frequency (past 12 months)",
                 "left_categories": ["Monthly+", "Every 2-3 months", "2-3x/year", "Once/year", "When needed"],
                 "left_values": [18, 42, 27, 7, 6],
-                "right_type": "hbar", "right_title": "Annual spend on scrubs",
+                "right_type": "hbar", "right_title": "Annual spend on products",
                 "right_categories": ["Under $100", "$100-$199", "$200-$299", "$300-$499", "$500+"],
                 "right_values": [10, 22, 30, 25, 13],
             },
             {
                 "chart_type": "hbar",
-                "title": "WHERE CONSUMERS PURCHASE SCRUBS",
+                "title": "WHERE CONSUMERS PURCHASE PRODUCTS",
                 "subtitle": "Primary purchase channels (select all that apply)",
-                "categories": ["Amazon", "Specialty uniform stores", "Walmart", "Brand websites (DTC)", "Target", "Employer-provided"],
+                "categories": ["Amazon", "Specialty retailers", "Walmart", "Brand websites (DTC)", "Target", "Other online"],
                 "values": [59, 51, 38, 41, 26, 25],
             },
             {
                 "chart_type": "hbar",
-                "title": "WHEN AND WHY CONSUMERS PURCHASE SCRUBS",
+                "title": "WHEN AND WHY CONSUMERS PURCHASE PRODUCTS",
                 "subtitle": "Usage occasions and triggers",
                 "categories": ["Regular replacement cycle", "Worn out / damaged", "New job / role change", "Seasonal refresh", "Sale / promotion", "Gift"],
                 "values": [65, 52, 38, 28, 22, 8],
@@ -1654,47 +1666,47 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
             {
                 "chart_type": "hbar",
                 "title": "PRE-PURCHASE ACTIVITIES",
-                "subtitle": "Steps taken before buying scrubs",
+                "subtitle": "Steps taken before buying products",
                 "categories": ["Read online reviews", "Compare prices across sites", "Visit brand website", "Ask coworkers", "Watch YouTube reviews", "Try in store", "Check social media"],
                 "values": [78, 62, 45, 42, 35, 30, 25],
             },
             # ── Purchase Drivers (4 charts) ──
             {
                 "chart_type": "hbar",
-                "title": "WHAT MATTERS MOST IN SCRUBS",
+                "title": "WHAT MATTERS MOST IN PRODUCTS",
                 "subtitle": "Top purchase drivers (select top 3)",
                 "categories": ["All-day comfort", "Stretch and flexibility", "Durability after washing", "Breathability", "Easy care", "Pockets / storage", "Fluid resistance", "Soft hand feel", "Consistent sizing"],
                 "values": [61, 42, 40, 28, 27, 23, 18, 17, 15],
             },
             {
                 "chart_type": "hbar",
-                "title": "WHAT DOES 'PREMIUM' MEAN IN SCRUBS?",
+                "title": "WHAT DOES 'PREMIUM' MEAN IN PRODUCTS?",
                 "subtitle": "Consumer definition of premium (select all that apply)",
-                "categories": ["Superior fabric technology", "Professional brand reputation", "Modern design / flattering fit", "Longer lasting durability", "Sustainable / ethical materials", "Endorsed by medical pros"],
+                "categories": ["Superior materials / technology", "Strong brand reputation", "Modern design / aesthetics", "Longer lasting durability", "Sustainable / ethical materials", "Expert endorsements"],
                 "values": [52, 38, 35, 32, 28, 22],
             },
             {
                 "chart_type": "dual",
                 "title": "WILLINGNESS TO PAY FOR QUALITY",
                 "subtitle": "Price sensitivity and premium willingness",
-                "left_type": "donut", "left_title": "Willing to pay more\nfor quality scrubs",
+                "left_type": "donut", "left_title": "Willing to pay more\nfor quality products",
                 "left_categories": ["Strongly agree", "Somewhat agree", "Neutral", "Disagree"],
                 "left_values": [35, 40, 15, 10],
-                "right_type": "hbar", "right_title": "Expected price per piece\nfor quality scrubs",
+                "right_type": "hbar", "right_title": "Expected price per piece\nfor quality products",
                 "right_categories": ["Under $25", "$25-$39", "$40-$59", "$60-$89", "$90+"],
                 "right_values": [8, 28, 35, 22, 7],
             },
             {
                 "chart_type": "wordcloud",
-                "title": "WHAT CONSUMERS SAY ABOUT SCRUBS",
+                "title": "WHAT CONSUMERS SAY ABOUT PRODUCTS",
                 "subtitle": "Word frequency from open-ended responses and reviews",
                 "words": {
                     "comfortable": 100, "durable": 90, "stretchy": 85, "soft": 82,
                     "pockets": 78, "breathable": 75, "professional": 70, "affordable": 68,
                     "quality": 65, "lightweight": 62, "flattering": 58, "modern": 55,
-                    "wrinkle-free": 52, "moisture-wicking": 50, "sizing": 48, "colors": 45,
-                    "wash well": 42, "value": 40, "stylish": 38, "fade-resistant": 35,
-                    "jogger": 33, "athletic": 30, "sustainable": 28, "innovative": 25,
+                    "long-lasting": 52, "easy to use": 50, "sizing": 48, "colors": 45,
+                    "well made": 42, "value": 40, "stylish": 38, "reliable": 35,
+                    "everyday use": 33, "athletic": 30, "sustainable": 28, "innovative": 25,
                     "fit": 95, "price": 88, "material": 72, "design": 60, "functional": 55,
                     "reliable": 50, "versatile": 48, "practical": 45, "trendy": 40,
                     "performance": 38, "easy care": 35, "true to size": 32, "color options": 30,
@@ -1709,7 +1721,7 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                 "title": "BRAND METRICS — AWARENESS TO ADVOCACY",
                 "subtitle": "Brand performance across key metrics",
                 "horizontal": True,
-                "categories": ["Dickies", "Cherokee", "FIGS", "Carhartt", "Med Couture", f"{bn}", "Healing Hands", "Jaanuu"],
+                "categories": ["Competitor F", "Competitor B", "Competitor A", "Competitor C", "Competitor D", f"{bn}", "Competitor E", "Competitor G"],
                 "groups": [
                     {"name": "Awareness", "values": [84, 78, 65, 62, 42, 38, 28, 16]},
                     {"name": "Purchase", "values": [52, 48, 35, 30, 22, 18, 15, 8]},
@@ -1719,15 +1731,15 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
             },
             {
                 "chart_type": "donut",
-                "title": "FAVORITE SCRUBS BRAND REGARDLESS OF PRICE",
+                "title": "FAVORITE PRODUCTS BRAND REGARDLESS OF PRICE",
                 "subtitle": "Which brand is your absolute favorite?",
                 "center_text": "N=200",
-                "categories": ["FIGS", "Cherokee", "Dickies", "Carhartt", f"{bn}", "Med Couture", "No favorite"],
+                "categories": ["Competitor A", "Competitor B", "Competitor F", "Competitor C", f"{bn}", "Competitor D", "No favorite"],
                 "values": [24, 18, 16, 12, 10, 8, 12],
             },
             {
                 "chart_type": "hbar",
-                "title": "LIKELIHOOD TO TRY A NEW SCRUBS BRAND",
+                "title": "LIKELIHOOD TO TRY A NEW PRODUCTS BRAND",
                 "subtitle": "How open are consumers to switching brands?",
                 "categories": ["Very likely", "Somewhat likely", "Neutral", "Somewhat unlikely", "Very unlikely"],
                 "values": [22, 35, 25, 12, 6],
@@ -1737,7 +1749,7 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                 "title": "BRAND ASSOCIATION MATRIX",
                 "subtitle": "Which brand best fits each description?",
                 "row_labels": ["Best quality", "Best value", "Most innovative", "Most trustworthy", "Most stylish", "Would recommend"],
-                "col_labels": ["FIGS", "Cherokee", "Dickies", "Carhartt", f"{bn}", "Med Couture"],
+                "col_labels": ["Competitor A", "Competitor B", "Competitor F", "Competitor C", f"{bn}", "Competitor D"],
                 "values": [
                     [42, 18, 15, 22, 20, 12],
                     [12, 35, 42, 28, 38, 15],
@@ -1761,7 +1773,7 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                 "theme": "Fit & Sizing",
                 "quotes": [
                     "Sizing doesn't always fit — I have to get medium bottoms and large tops",
-                    "I wish they scrubs were more durable with colors lasting longer",
+                    "I wish they products were more durable with colors lasting longer",
                     "The drawstring tie on most pants is unusable",
                 ],
             },
@@ -1770,28 +1782,28 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                 "quotes": [
                     "I think that they should be more affordable regardless of quality",
                     "The cost is a bit high for the quality",
-                    "Don't mind paying more for a durable, fashionable sharp looking professional scrub",
+                    "Don't mind paying more for a durable, well-designed product that lasts",
                 ],
             },
         ],
         "segments": [
             {
                 "name": "Endurance First",
-                "tagline": "I want scrubs that perform as hard as I do",
+                "tagline": "I want products that perform as hard as I do",
                 "size_pct": 27,
                 "narrative": (
-                    f"Meet the Endurance First buyer: a Nurse Practitioner or Physician Assistant pulling 10-12 hour shifts "
-                    "in a hospital environment, where every piece of clothing is tested by constant movement, fluid exposure, "
-                    "and repeated washing. This segment (73% under 45, 36% household income over $100K) views scrubs as "
-                    "essential performance equipment — not uniforms, not fashion. They spend the most annually ($393 median) "
+                    f"Meet the Endurance First buyer: an active professional who puts their gear through daily heavy use "
+                    "across demanding environments, where every product is tested by constant activity, exposure, "
+                    "and repeated use. This segment (73% under 45, 36% household income over $100K) views products as "
+                    "essential performance equipment — not accessories, not fashion. They spend the most annually ($393 median) "
                     "and buy every 2-3 months, driven by replacement cycles rather than impulse. What matters: durability that "
-                    "survives 100+ wash cycles, stretch that doesn't lose shape, and comfort that holds up from hour 1 to hour 12. "
+                    "survives heavy daily use, quality that doesn't degrade, and performance that holds up over time. "
                     "They research heavily on Amazon (27% default to Amazon for speed and reviews) and are willing to pay more — "
-                    "58% strongly agree they'd pay more for scrubs that deliver. Their frustration: too many brands promise "
-                    "performance but can't survive the reality of a demanding healthcare shift."
+                    "58% strongly agree they'd pay more for products that deliver. Their frustration: too many brands promise "
+                    "performance but can't survive the reality of demanding daily use."
                 ),
                 "demographics": {
-                    "primary_role": "Nurse Practitioner (NP) / Physician Assistant (PA)",
+                    "primary_role": "Active professional / Daily power user",
                     "age_skew": "73% under 45 — predominantly Millennial with significant Gen X presence",
                     "income": "36% household income over $100K — highest earning segment",
                     "gender_split": "65% female, 35% male",
@@ -1803,8 +1815,8 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                     "brand_loyalty": "Medium — loyal to performance, not brand name. Will switch if quality drops.",
                 },
                 "top_needs": ["Longer-lasting durability (51%)", "Better fabric performance (49%)", "More consistent fit (40%)"],
-                "pain_points": ["Inconsistent sizing between brands (35%)", "Scrubs lose shape over time (29%)", "Insufficient pockets (24%)"],
-                "what_premium_means": "Evidence of superior fabric technology (42%), professional brand name (27%), and endorsements from medical professionals (24%). Premium = proof of performance.",
+                "pain_points": ["Inconsistent sizing between brands (35%)", "Products lose shape over time (29%)", "Insufficient pockets (24%)"],
+                "what_premium_means": "Evidence of superior materials/technology (42%), strong brand reputation (27%), and expert endorsements (24%). Premium = proof of performance.",
                 "lifestyle_signals": [
                     {"category": "Social Media", "detail": "78% use YouTube more than any other social media platform"},
                     {"category": "Music Preference", "detail": "45% like Rock music with 41% who like Hip-Hop/Rap"},
@@ -1813,12 +1825,12 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
             },
             {
                 "name": "Fit Focused",
-                "tagline": "I want scrubs that look as good as they feel",
+                "tagline": "I want products that look as good as they feel",
                 "size_pct": 25,
                 "narrative": (
-                    "Meet the Fit Focused buyer: a Medical Assistant or Technician in her late 20s to early 30s, scrolling "
-                    "through scrubs on her phone between patients, looking for that perfect combination of professional fit "
-                    "and personal style. This segment (45% under 45, primarily Millennial) cares deeply about how scrubs look "
+                    "Meet the Fit Focused buyer: a young professional in her late 20s to early 30s, scrolling "
+                    "through products on her phone during breaks, looking for that perfect combination of quality "
+                    "and personal style. This segment (45% under 45, primarily Millennial) cares deeply about how products look "
                     "AND feel — they want modern silhouettes, flattering cuts, and colors that express personality while "
                     "maintaining professionalism. At $245 median annual spend, they're price-conscious but willing to invest "
                     "in the right piece. Their biggest frustration: length issues (41%) and inconsistent sizing (25%) turn "
@@ -1827,7 +1839,7 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                     "this segment becomes fiercely loyal."
                 ),
                 "demographics": {
-                    "primary_role": "Medical Assistant / Technician",
+                    "primary_role": "Young professional / Style-conscious buyer",
                     "age_skew": "45% under 45 — more evenly distributed across generations",
                     "income": "31% household income over $100K",
                     "gender_split": "70% female, 30% male",
@@ -1852,17 +1864,17 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                 "tagline": "I want the best quality I can get for the price",
                 "size_pct": 21,
                 "narrative": (
-                    "Meet the Value Hunter: a Registered Nurse with her shopping cart open, calculator in hand, comparing "
+                    "Meet the Value Hunter: a savvy shopper with her shopping cart open, calculator in hand, comparing "
                     "prices across three websites. She's not cheap, she's strategic. This segment (58% Millennial, split between "
                     "married and single) earns mostly upper-middle income (51%) with 30% low-middle. At $294 spent annually, they "
                     "demand the best quality for every dollar. They shop Amazon (63%), specialty uniform stores (50%), and brand "
                     "websites (44%) hunting for deals. 'Premium' must prove itself: superior fabric technology (40%) and a "
                     "professional brand experience beyond Amazon (30%). Their biggest headache: inconsistent sizing (40%) turns "
                     "online shopping into a gamble. They want brands to deliver fair value and stop forcing them to choose "
-                    "between budget and scrubs that actually work."
+                    "between budget and products that actually work."
                 ),
                 "demographics": {
-                    "primary_role": "Medical Assistant / Technician (44%), Registered Nurse (28%)",
+                    "primary_role": "Value-conscious professional (44%), Budget-aware buyer (28%)",
                     "age_skew": "58% Millennial, 23% Gen X — core working-age",
                     "income": "51% upper-middle income, 30% low-middle",
                     "gender_split": "67% female, 33% male",
@@ -1874,7 +1886,7 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                     "brand_loyalty": "Low — loyalty goes to value, not brand name. Will switch for a better deal.",
                 },
                 "top_needs": ["All-day comfort (72%)", "Stretch and flexibility (44%)", "Durability after repeated washing (35%)"],
-                "pain_points": ["Inconsistent sizing between brands (40%)", "Scrubs lose shape over time (26%)", "Tightness in hips or thighs (26%)"],
+                "pain_points": ["Inconsistent sizing between brands (40%)", "Products lose shape over time (26%)", "Tightness in hips or thighs (26%)"],
                 "what_premium_means": "Evidence of superior fabric technology (40%), a dedicated website with professional brand experience beyond Amazon (30%), higher pricing that signals quality (26%). Premium = proven performance at fair price.",
                 "lifestyle_signals": [
                     {"category": "Social Media", "detail": "88% use Facebook more than any other social media platform"},
@@ -1884,20 +1896,20 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
             },
             {
                 "name": "Polished Pro",
-                "tagline": "I want scrubs that make me look polished and confident",
+                "tagline": "I want products that make me look polished and confident",
                 "size_pct": 18,
                 "narrative": (
-                    "Meet the Polished Pro: a physician adjusting her scrubs before rounds, ensuring every detail projects "
-                    "confidence. Appearance isn't vanity, it's professional presence. This segment (53% Millennial, 64% married) "
-                    "is the highest earner with 47% high income, 31% upper-middle. At $294 spent annually, they invest in scrubs "
-                    "that look as capable as they are. The most clinically advanced segment (42% RNs, 19% Medical Assistants, "
-                    "14% Physicians/Surgeons). Image-conscious and quality-driven: Amazon (64%), specialty stores (61%), Walmart (47%). "
+                    "Meet the Polished Pro: a discerning professional curating her products before heading out, ensuring every detail projects "
+                    "confidence. Appearance isn't vanity, it's personal brand. This segment (53% Millennial, 64% married) "
+                    "is the highest earner with 47% high income, 31% upper-middle. At $294 spent annually, they invest in products "
+                    "that look as premium as they are. The most discerning segment (42% frequent buyers, 19% brand loyalists, "
+                    "14% early adopters). Image-conscious and quality-driven: Amazon (64%), specialty stores (61%), Walmart (47%). "
                     "'Premium' means superior fabric technology (39%) plus high-end, modern design with flattering cuts (36%). "
                     "81% use Instagram more than any other segment — they're visually engaged and style-aware. They'll pay premium "
-                    "but only if scrubs deliver both professionalism and performance."
+                    "but only if products deliver both professionalism and performance."
                 ),
                 "demographics": {
-                    "primary_role": "Registered Nurse (42%), Medical Assistant (19%), Physician/Surgeon (14%)",
+                    "primary_role": "Frequent buyer (42%), Brand loyalist (19%), Early adopter (14%)",
                     "age_skew": "53% Millennial, 25% Gen X, 17% Gen Z",
                     "income": "47% high income, 31% upper-middle — highest income segment",
                     "gender_split": "69% female, 31% male",
@@ -1909,7 +1921,7 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                     "brand_loyalty": "High — invest in brands that reflect their professional image. Highest brand awareness overall.",
                 },
                 "top_needs": ["All-day comfort (50%)", "Stretch and flexibility (50%)", "Durability after repeated washing (39%)"],
-                "pain_points": ["Inconsistent sizing between brands (40%)", "Scrubs lose shape over time (26%)", "Tightness in hips or thighs (26%)"],
+                "pain_points": ["Inconsistent sizing between brands (40%)", "Products lose shape over time (26%)", "Tightness in hips or thighs (26%)"],
                 "what_premium_means": "Superior fabric technology (39%), high-end modern design with flattering cuts (36%), dedicated website with professional brand experience (31%), sustainable materials (33% — highest of any segment). Premium = looking sharp AND performing well.",
                 "lifestyle_signals": [
                     {"category": "Social Media", "detail": "81% use Instagram more than any other segment — visually engaged and style-aware"},
@@ -1919,18 +1931,18 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
             },
             {
                 "name": "Basic Buyer",
-                "tagline": "I just need scrubs that work",
+                "tagline": "I just need products that work",
                 "size_pct": 8,
                 "narrative": (
-                    "Meet the Basic Buyer: a healthcare worker who views scrubs as a necessary uniform, not a category worth "
-                    "investing thought or money into. This smallest segment treats scrubs as purely functional — whatever is cheapest, "
+                    "Meet the Basic Buyer: a consumer who views products as a necessary purchase, not a category worth "
+                    "investing thought or money into. This smallest segment treats products as purely functional — whatever is cheapest, "
                     "most available, and good enough will do. They buy infrequently, spend the least, and have minimal brand awareness "
                     "or loyalty. They are not a viable target for any brand seeking to build premium positioning, but they represent "
-                    "the floor of the market and help define what 'commodity scrubs' looks like — the position every brand should "
+                    "the floor of the market and help define what 'commodity products' looks like — the position every brand should "
                     "want to avoid."
                 ),
                 "demographics": {
-                    "primary_role": "Mixed — various entry-level healthcare roles",
+                    "primary_role": "Mixed — various casual/infrequent buyers",
                     "age_skew": "Broadly distributed across generations",
                     "income": "Predominantly low to low-middle income",
                     "gender_split": "60% female, 40% male",
@@ -1942,7 +1954,7 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                     "brand_loyalty": "None — purely price and availability driven",
                 },
                 "top_needs": ["Low price", "Availability", "Basic comfort"],
-                "pain_points": ["Having to buy scrubs at all", "Price of quality scrubs"],
+                "pain_points": ["Having to buy products at all", "Price of quality products"],
                 "what_premium_means": "Not relevant — this segment does not engage with premium concepts",
                 "lifestyle_signals": [],
             },
@@ -1951,8 +1963,8 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
             "primary_segment": "Endurance First",
             "title": "PRIMARY TARGET: ENDURANCE FIRST PROFESSIONALS",
             "rationale_bullets": [
-                f"Defines quality: If scrubs perform for the most demanding shifts, they earn trust across the market. Endurance First professionals set the performance standard for the category — winning them validates the product for everyone else.",
-                f"Highest value: Spend $393 annually (highest of all segments) and 58% strongly agree they'd pay more for scrubs that deliver. They are willing to invest in proven performance.",
+                f"Defines quality: If products perform for the most demanding shifts, they earn trust across the market. Endurance First professionals set the performance standard for the category — winning them validates the product for everyone else.",
+                f"Highest value: Spend $393 annually (highest of all segments) and 58% strongly agree they'd pay more for products that deliver. They are willing to invest in proven performance.",
                 f"Strong product fit: Their unmet needs — durability, fabric performance, consistent fit — align directly with {bn}'s execution strengths. The product already delivers what they want; the brand just needs to communicate it.",
                 f"Natural channel fit: Already research and shop heavily on Amazon (27% default channel), where {bn} has established traction. The path to reach them is already built.",
             ],
@@ -1977,13 +1989,13 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
              "reason": "Style-first, high expectations. Requires visual brand assets not yet built — strong future target after brand elevation."},
         ],
         "competitive_fares": {
-            "brand_strengths": "FIGS → Lifestyle & Premium, Cherokee → Heritage & Trust, Dickies → Durability, Carhartt → Workwear Authority",
+            "brand_strengths": "Competitor A → Innovation & Premium, Competitor B → Heritage & Trust, Competitor C → Durability, Competitor D → Authority",
             "category_compromise": "The category forces buyers to choose between affordable performance and premium brand experience. No brand combines both.",
             "strategic_opportunity": f"A brand that delivers proven performance at accessible prices with a credible, modern identity — {bn}'s execution strengths point directly here.",
             "strategic_question": f"What would it look like to build a brand that earns the trust of the most demanding professionals — and grows from there?",
         },
         "consumer_summary": (
-            "Endurance First professionals spend the most and define what quality means in scrubs. "
+            "Endurance First professionals spend the most and define what quality means in products. "
             f"Their needs align with {bn}'s product strengths and Amazon presence. "
             "Next: define a brand position that resonates with performance-first buyers."
         ),
@@ -1993,7 +2005,7 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
                 "bullets": [
                     "Comfort is the #1 driver (50-72%) across all segments. Functional excellence is the entry ticket.",
                     "Amazon dominates (59-64%) but DTC shows traction (16-33%). Consumers are open to buying direct.",
-                    "88% would pay more for scrubs that deliver. Willingness exists — a clear brand reason is missing.",
+                    "88% would pay more for products that deliver. Willingness exists — a clear brand reason is missing.",
                 ],
                 "insight": "Consumers will pay for proven performance — they just need a reason to believe.",
             },
@@ -2008,13 +2020,13 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
             "current brand name — to support long-term growth."
         ),
         "competition_column": (
-            "The scrubs market is well-established, with leading brands succeeding by owning a clear and "
-            "focused role — such as lifestyle identity, medical authority, durability, value, style, or "
+            "The products market is well-established, with leading brands succeeding by owning a clear and "
+            "focused role — such as lifestyle identity, innovation leadership, durability, value, style, or "
             "comfort — rather than trying to compete across everything at once."
         ),
         "consumer_column": (
             "Endurance First professionals spend the most, set the highest performance standards, and define "
-            "what quality means in scrubs — making them the most valuable and influential segment in the market."
+            "what quality means in products — making them the most valuable and influential segment in the market."
         ),
         "closing_insight": (
             f"Building on these insights, we will define a clear and differentiated brand position for {bn} — "

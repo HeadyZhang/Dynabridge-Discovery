@@ -150,26 +150,48 @@ async def _discover_from_amazon(
                 "our brands", "related brands", "popular brands",
                 "more results", "see more", "shop now",
                 "customers also", "frequently bought",
-                "from the manufacturer", "highly rated",
+                "from the manufacturer", "highly rated", "featured from",
+                "amazon brands", "amazon brand",
                 "new arrivals", "new releases",
                 "left in stock", "order soon", "only ",
                 "add to cart", "add to list", "save for later",
                 "in stock", "out of stock", "ships from",
                 "fulfilled by", "sold by",
+                # Material / attribute fragments
+                "stainless steel", "stainless", "recycled",
+                "contains at least", "temperature", "retention",
+                "top reviewed", "more buying", "buying choices",
+                "/count", "per count", "plastic", "aluminum",
+                "ceramic", "glass", "silicone", "tritan",
+                # Measurement / specs
+                "ounce", "oz", "ml", "liter", "inch",
+                "bpa free", "bpa-free", "leak proof", "leak-proof",
+                "insulated", "vacuum", "double wall",
+                # Price fragments
+                "$", "¢", "price", "cost",
             }
             brand_counts = Counter()
             for b in brands:
                 clean = b.strip()
                 lower = clean.lower()
+                # Brand name structural validation
+                word_count = len(clean.split())
+                has_alpha = any(c.isalpha() for c in clean)
+                starts_with_paren = clean.startswith("(") or clean.startswith("[")
+                is_too_long_phrase = word_count > 5
+                has_special = any(c in clean for c in "$¢%@#")
                 if (
                     clean
                     and len(clean) > 1
-                    and len(clean) < 50
+                    and len(clean) < 40
+                    and has_alpha
+                    and not starts_with_paren
+                    and not is_too_long_phrase
+                    and not has_special
                     and clean.lower() != brand_name_lower
                     and not clean.startswith("Visit")
                     and not clean.isdigit()
                     and not any(j in lower for j in junk_patterns)
-                    and not lower.endswith("$")
                     and not lower[0].isdigit()
                 ):
                     brand_counts[clean] += 1
@@ -221,7 +243,7 @@ Return ONLY a JSON array of competitor objects. Each object must have:
 - "category_role": one of "direct" | "aspirational" | "adjacent"
 - "reason": one sentence explaining why they're a competitor
 
-Example: [{{"name": "FIGS", "category_role": "aspirational", "reason": "Premium DTC scrubs brand that defined the lifestyle category"}}]
+Example: [{{"name": "Hydro Flask", "category_role": "direct", "reason": "Leading insulated water bottle brand competing in the same category"}}]
 
 Return ONLY the JSON array, no other text."""
 
@@ -263,12 +285,22 @@ def _fallback_ai_competitors(brand_name: str, scrape_data: dict = None) -> list[
         for page in scrape_data.get("pages", []):
             all_text += " " + page.get("text", "")
 
-        # Common brand patterns in medical/apparel context
+        # Common global brand names as a broad fallback
         known_brands = [
-            "FIGS", "Cherokee", "Dickies", "Carhartt", "Med Couture",
-            "Healing Hands", "Jaanuu", "Barco", "WonderWink", "Dagacci",
-            "Grey's Anatomy", "Koi", "HeartSoul", "Landau", "Urbane",
+            # General consumer
             "Nike", "Adidas", "Under Armour", "Lululemon", "Gymshark",
+            "Patagonia", "The North Face", "Columbia", "REI",
+            # Beverage / water bottles
+            "Hydro Flask", "Stanley", "Yeti", "CamelBak", "Nalgene",
+            "S'well", "Takeya", "Contigo", "Thermos", "Zojirushi",
+            "Simple Modern", "Iron Flask", "Klean Kanteen", "Corkcicle",
+            # Home / lifestyle
+            "IKEA", "Crate & Barrel", "West Elm", "CB2",
+            # Beauty / personal care
+            "Glossier", "The Ordinary", "CeraVe", "Drunk Elephant",
+            # Medical / scrubs
+            "FIGS", "Cherokee", "Dickies", "Carhartt", "Med Couture",
+            "Healing Hands", "Jaanuu", "Barco",
         ]
 
         for brand in known_brands:
@@ -297,24 +329,45 @@ def _infer_category(ecommerce_data: dict = None) -> str:
 
     # Check for category keywords
     category_map = {
+        # Beverage / drinkware
+        "water bottle": "water bottles insulated",
+        "tumbler": "insulated tumblers",
+        "bottle": "water bottles drinkware",
+        "flask": "insulated water flask",
+        # Apparel
         "scrubs": "medical scrubs",
         "nursing": "nursing scrubs uniforms",
         "medical": "medical uniforms scrubs",
-        "jogger": "medical scrub jogger pants",
+        "jogger": "jogger pants",
         "lab coat": "lab coats medical",
         "yoga": "yoga pants leggings",
         "athletic": "athletic wear",
         "sneaker": "sneakers shoes",
         "shirt": "shirts apparel",
+        # Home / kitchen
+        "candle": "candles home fragrance",
+        "cookware": "cookware kitchen",
+        "mattress": "mattresses beds",
+        # Beauty
+        "serum": "skincare serum",
+        "moisturizer": "skincare moisturizer",
+        "shampoo": "hair care shampoo",
+        # Tech
+        "headphone": "headphones earbuds",
+        "speaker": "bluetooth speakers",
+        "charger": "phone chargers",
     }
 
     for keyword, search_term in category_map.items():
         if keyword in all_words:
             return search_term
 
-    # Default: use first product name keywords
+    # Default: use first product name keywords (cleaned)
     if product_names:
-        return product_names[0][:50]
+        # Take the first meaningful product name, strip noise
+        first = product_names[0][:50]
+        # Remove brand name and common noise words
+        return first
 
     return ""
 
