@@ -455,6 +455,152 @@ def synthesize_insights(
     }
 
 
+# ── Industry Intelligence ─────────────────────────────────
+
+
+@router.get("/industries/compare")
+def compare_industries(industries: str = Query(...)):
+    """Multi-industry comparison (comma-separated)."""
+    industry_list = [i.strip() for i in industries.split(",") if i.strip()]
+    db = _get_db()
+
+    from collections import Counter
+    comparison = {}
+    for ind in industry_list:
+        cases = db.query(CaseProject).filter(CaseProject.industry == ind).all()
+        insights = db.query(ConsumerInsight).filter(ConsumerInsight.industry == ind).all()
+        type_dist = Counter(i.insight_type for i in insights)
+
+        comparison[ind] = {
+            "case_count": len(cases),
+            "insight_count": len(insights),
+            "insight_types": dict(type_dist),
+            "brands": [c.brand_name for c in cases],
+        }
+
+    db.close()
+    return comparison
+
+
+@router.get("/industries/{industry}/report")
+def generate_industry_report(industry: str):
+    """AI-generated industry experience report."""
+    db = _get_db()
+    cases = db.query(CaseProject).filter(CaseProject.industry == industry).all()
+    insights = db.query(ConsumerInsight).filter(ConsumerInsight.industry == industry).all()
+    db.close()
+
+    case_summaries = []
+    for c in cases:
+        tags = {}
+        if c.ai_tags_json:
+            try:
+                tags = json.loads(c.ai_tags_json) if isinstance(c.ai_tags_json, str) else (c.ai_tags_json or {})
+            except (json.JSONDecodeError, TypeError):
+                pass
+        case_summaries.append(
+            f"Brand: {c.brand_name}, Challenges: {tags.get('core_challenges', [])}, "
+            f"Insights: {tags.get('key_insights', [])}"
+        )
+
+    insight_texts = [f"[{i.brand_name}] {i.insight_text}" for i in insights[:20]]
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": f"""你是 Dynabridge 品牌咨询公司的行业分析专家。
+基于以下 {industry} 行业的历史案例数据，生成一份行业经验报告。
+
+案例:
+{chr(10).join(case_summaries)}
+
+消费者洞察:
+{chr(10).join(insight_texts)}
+
+报告结构（中英双语）：
+1. 行业概况（几个客户，什么类型的品牌）
+2. 共同挑战和解决模式
+3. 消费者画像共性
+4. 定价和定位模式
+5. 给新客户的建议
+
+直接输出报告文字。"""}],
+        )
+        return {"report": response.content[0].text, "case_count": len(cases), "insight_count": len(insights)}
+    except Exception as e:
+        return {
+            "report": f"AI report generation unavailable. {len(cases)} cases, {len(insights)} insights in {industry}.",
+            "case_count": len(cases),
+            "insight_count": len(insights),
+        }
+
+
+@router.get("/industries/{industry}")
+def get_industry_detail(industry: str):
+    """Deep analysis for a single industry."""
+    db = _get_db()
+    cases = db.query(CaseProject).filter(CaseProject.industry == industry).all()
+    insights = db.query(ConsumerInsight).filter(ConsumerInsight.industry == industry).all()
+    db.close()
+
+    return {
+        "industry": industry,
+        "cases": [
+            {
+                "id": c.id,
+                "brand": c.brand_name,
+                "completeness": c.completeness_score,
+                "has_discovery": bool(c.has_discovery),
+                "has_strategy": bool(c.has_strategy),
+                "challenges": _get_challenges(c),
+            }
+            for c in cases
+        ],
+        "insights": [
+            {"text": i.insight_text, "type": i.insight_type, "brand": i.brand_name}
+            for i in insights[:20]
+        ],
+        "total_insights": len(insights),
+    }
+
+
+@router.get("/industries")
+def list_industries():
+    """All industries aggregated overview."""
+    db = _get_db()
+    cases = db.query(CaseProject).all()
+
+    industries: dict[str, dict] = {}
+    for case in cases:
+        ind = case.industry or "other"
+        if ind not in industries:
+            industries[ind] = {"brands": [], "case_count": 0, "challenges": [], "insights_count": 0}
+        industries[ind]["brands"].append(case.brand_name)
+        industries[ind]["case_count"] += 1
+        industries[ind]["challenges"].extend(_get_challenges(case))
+
+    for ind in industries:
+        count = db.query(ConsumerInsight).filter(ConsumerInsight.industry == ind).count()
+        industries[ind]["insights_count"] = count
+        industries[ind]["challenges"] = list(set(industries[ind]["challenges"]))[:5]
+
+    db.close()
+    return industries
+
+
+def _get_challenges(case: CaseProject) -> list[str]:
+    if not case.ai_tags_json:
+        return []
+    try:
+        tags = json.loads(case.ai_tags_json) if isinstance(case.ai_tags_json, str) else (case.ai_tags_json or {})
+        return tags.get("core_challenges", [])
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
 @router.get("/survey-analytics")
 def survey_analytics():
     """Questionnaire analytics overview — survey files, response data, cross-case stats."""
