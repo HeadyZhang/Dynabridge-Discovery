@@ -9,6 +9,8 @@ import {
   getConsumerInsights, getSynthesis, getStats,
   type ConsumerInsightData, type KnowledgeStats,
 } from "@/lib/knowledge-api";
+import KnowledgeNav from "@/components/KnowledgeNav";
+import { useLanguage } from "@/lib/language-context";
 
 const INSIGHT_TYPES = [
   "purchase_driver", "barrier", "need_state", "perception",
@@ -29,6 +31,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export default function InsightsPage() {
+  const { t } = useLanguage();
   const [insights, setInsights] = useState<ConsumerInsightData[]>([]);
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
@@ -87,42 +90,29 @@ export default function InsightsPage() {
 
   return (
     <div className="min-h-screen bg-neutral-50">
-      <header className="bg-white border-b border-neutral-200 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/knowledge" className="text-neutral-400 hover:text-neutral-600 text-sm">
-              Knowledge Base
-            </Link>
-            <span className="text-neutral-300">/</span>
-            <div className="flex items-center gap-2">
-              <Lightbulb className="w-5 h-5 text-brand-500" />
-              <h1 className="text-lg font-semibold text-neutral-900">Consumer Insights</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link href="/industries" className="px-3 py-1.5 text-sm text-neutral-600 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors">
-              Industries
-            </Link>
-            <Link href="/marketing" className="px-3 py-1.5 text-sm text-neutral-600 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors">
-              Marketing
-            </Link>
-          </div>
-        </div>
-      </header>
+      <KnowledgeNav />
 
       <div className="max-w-7xl mx-auto px-6 py-6">
+        {/* Page title */}
+        <div className="flex items-center gap-2 mb-6">
+          <Lightbulb className="w-5 h-5 text-brand-500" />
+          <h1 className="text-lg font-semibold text-neutral-900">
+            {t("Consumer Insights", "\u6d88\u8d39\u8005\u6d1e\u5bdf")}
+          </h1>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-neutral-200 p-4">
-            <p className="text-sm text-neutral-500">Total Insights</p>
+            <p className="text-sm text-neutral-500">{t("Total Insights", "\u603b\u6d1e\u5bdf\u6570")}</p>
             <p className="text-2xl font-semibold text-neutral-900 mt-1">{total}</p>
           </div>
           <div className="bg-white rounded-xl border border-neutral-200 p-4">
-            <p className="text-sm text-neutral-500">Industries Covered</p>
+            <p className="text-sm text-neutral-500">{t("Industries Covered", "\u8986\u76d6\u884c\u4e1a")}</p>
             <p className="text-2xl font-semibold text-neutral-900 mt-1">{industries.length}</p>
           </div>
           <div className="bg-white rounded-xl border border-neutral-200 p-4">
-            <p className="text-sm text-neutral-500">Insight Types</p>
+            <p className="text-sm text-neutral-500">{t("Insight Types", "\u6d1e\u5bdf\u7c7b\u578b")}</p>
             <p className="text-2xl font-semibold text-neutral-900 mt-1">{INSIGHT_TYPES.length}</p>
           </div>
         </div>
@@ -132,18 +122,18 @@ export default function InsightsPage() {
           <div className="col-span-1 space-y-4">
             <div className="bg-white rounded-xl border border-neutral-200 p-4">
               <h3 className="text-sm font-medium text-neutral-700 mb-3 flex items-center gap-2">
-                <Filter className="w-4 h-4" /> Filters
+                <Filter className="w-4 h-4" /> {t("Filters", "\u7b5b\u9009")}
               </h3>
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-neutral-500 mb-1 block">Industry</label>
+                  <label className="text-xs text-neutral-500 mb-1 block">{t("Industry", "\u884c\u4e1a")}</label>
                   <select
                     value={filterIndustry}
                     onChange={(e) => setFilterIndustry(e.target.value)}
                     className="w-full px-3 py-1.5 text-sm border border-neutral-200 rounded-lg bg-white"
                   >
-                    <option value="">All Industries</option>
+                    <option value="">{t("All Industries", "\u6240\u6709\u884c\u4e1a")}</option>
                     {industries.map((ind) => (
                       <option key={ind} value={ind}>{ind}</option>
                     ))}
@@ -151,13 +141,13 @@ export default function InsightsPage() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-neutral-500 mb-1 block">Insight Type</label>
+                  <label className="text-xs text-neutral-500 mb-1 block">{t("Insight Type", "\u6d1e\u5bdf\u7c7b\u578b")}</label>
                   <select
                     value={filterType}
                     onChange={(e) => setFilterType(e.target.value)}
                     className="w-full px-3 py-1.5 text-sm border border-neutral-200 rounded-lg bg-white"
                   >
-                    <option value="">All Types</option>
+                    <option value="">{t("All Types", "\u6240\u6709\u7c7b\u578b")}</option>
                     {INSIGHT_TYPES.map((t) => (
                       <option key={t} value={t}>{t.replace("_", " ")}</option>
                     ))}
@@ -165,13 +155,13 @@ export default function InsightsPage() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-neutral-500 mb-1 block">Market</label>
+                  <label className="text-xs text-neutral-500 mb-1 block">{t("Market", "\u5e02\u573a")}</label>
                   <select
                     value={filterGeo}
                     onChange={(e) => setFilterGeo(e.target.value)}
                     className="w-full px-3 py-1.5 text-sm border border-neutral-200 rounded-lg bg-white"
                   >
-                    <option value="">All Markets</option>
+                    <option value="">{t("All Markets", "\u6240\u6709\u5e02\u573a")}</option>
                     {GEO_OPTIONS.map((g) => (
                       <option key={g} value={g}>{g.toUpperCase()}</option>
                     ))}
@@ -191,7 +181,7 @@ export default function InsightsPage() {
               ) : (
                 <Sparkles className="w-4 h-4" />
               )}
-              AI Synthesis
+              {t("AI Synthesis", "AI \u7efc\u5408\u5206\u6790")}
             </button>
           </div>
 
@@ -206,7 +196,7 @@ export default function InsightsPage() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search insights by keyword..."
+                    placeholder={t("Search insights by keyword...", "\u6309\u5173\u952e\u8bcd\u641c\u7d22\u6d1e\u5bdf...")}
                     className="w-full pl-9 pr-3 py-2 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                   />
                 </div>
@@ -217,7 +207,7 @@ export default function InsightsPage() {
             {synthesis && (
               <div className="bg-brand-50 border border-brand-200 rounded-xl p-4">
                 <h3 className="text-sm font-medium text-brand-700 mb-2 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4" /> AI Cross-Case Synthesis
+                  <Sparkles className="w-4 h-4" /> {t("AI Cross-Case Synthesis", "AI \u8de8\u6848\u4f8b\u7efc\u5408\u5206\u6790")}
                 </h3>
                 <div className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed">
                   {synthesis}

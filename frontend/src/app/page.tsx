@@ -351,6 +351,12 @@ export default function Home() {
           <img src="/logo.png" alt="DynaBridge" className="h-9 object-contain" />
         </div>
         <div className="flex items-center gap-2">
+          <a
+            href="/knowledge"
+            className="px-3 py-1.5 text-sm font-medium text-neutral-600 hover:text-brand-500 rounded-lg hover:bg-brand-50 transition-colors"
+          >
+            {locale === "en" ? "Knowledge Base" : "\u6848\u4f8b\u77e5\u8bc6\u5e93"}
+          </a>
           <button
             onClick={() => setLocale(locale === "en" ? "zh" : "en")}
             className="px-3 py-1.5 text-sm font-medium text-neutral-600 hover:text-brand-500 rounded-lg hover:bg-brand-50 transition-colors"

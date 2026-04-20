@@ -14,6 +14,8 @@ import {
   getMarketIntelligence, listCases, getStats,
   type MarketIntelligence, type CaseSummary, type KnowledgeStats,
 } from "@/lib/knowledge-api";
+import KnowledgeNav from "@/components/KnowledgeNav";
+import { useLanguage } from "@/lib/language-context";
 
 const MARKETS = [
   { value: "US", label: "United States" },
@@ -24,6 +26,7 @@ const MARKETS = [
 ];
 
 export default function MarketingPage() {
+  const { t } = useLanguage();
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
   const [selectedBrand, setSelectedBrand] = useState("");
@@ -66,30 +69,16 @@ export default function MarketingPage() {
 
   return (
     <div className="min-h-screen bg-neutral-50">
-      <header className="bg-white border-b border-neutral-200 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/knowledge" className="text-neutral-400 hover:text-neutral-600 text-sm">
-              Knowledge Base
-            </Link>
-            <span className="text-neutral-300">/</span>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-brand-500" />
-              <h1 className="text-lg font-semibold text-neutral-900">Marketing Intelligence</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link href="/insights" className="px-3 py-1.5 text-sm text-neutral-600 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors">
-              Insights
-            </Link>
-            <Link href="/industries" className="px-3 py-1.5 text-sm text-neutral-600 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors">
-              Industries
-            </Link>
-          </div>
-        </div>
-      </header>
+      <KnowledgeNav />
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+        {/* Page title */}
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-brand-500" />
+          <h1 className="text-lg font-semibold text-neutral-900">
+            {t("Marketing Intelligence", "\u8425\u9500\u60c5\u62a5")}
+          </h1>
+        </div>
         {/* Input Controls */}
         <div className="bg-white rounded-xl border border-neutral-200 p-5">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

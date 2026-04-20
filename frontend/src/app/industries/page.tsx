@@ -6,8 +6,11 @@ import {
   Building2, ArrowRight, Lightbulb, Database, Loader2, Tag,
 } from "lucide-react";
 import { getIndustries, type IndustryOverview } from "@/lib/knowledge-api";
+import KnowledgeNav from "@/components/KnowledgeNav";
+import { useLanguage } from "@/lib/language-context";
 
 export default function IndustriesPage() {
+  const { t } = useLanguage();
   const [industries, setIndustries] = useState<IndustryOverview>({});
   const [loading, setLoading] = useState(true);
 
@@ -24,44 +27,31 @@ export default function IndustriesPage() {
 
   return (
     <div className="min-h-screen bg-neutral-50">
-      <header className="bg-white border-b border-neutral-200 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/knowledge" className="text-neutral-400 hover:text-neutral-600 text-sm">
-              Knowledge Base
-            </Link>
-            <span className="text-neutral-300">/</span>
-            <div className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-brand-500" />
-              <h1 className="text-lg font-semibold text-neutral-900">Industry Intelligence</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link href="/insights" className="px-3 py-1.5 text-sm text-neutral-600 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors">
-              Insights
-            </Link>
-            <Link href="/marketing" className="px-3 py-1.5 text-sm text-neutral-600 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors">
-              Marketing
-            </Link>
-          </div>
-        </div>
-      </header>
+      <KnowledgeNav />
 
       <div className="max-w-7xl mx-auto px-6 py-6">
+        {/* Page title */}
+        <div className="flex items-center gap-2 mb-6">
+          <Building2 className="w-5 h-5 text-brand-500" />
+          <h1 className="text-lg font-semibold text-neutral-900">
+            {t("Industry Intelligence", "\u884c\u4e1a\u5206\u6790")}
+          </h1>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-neutral-200 p-4">
-            <p className="text-sm text-neutral-500">Industries</p>
+            <p className="text-sm text-neutral-500">{t("Industries", "\u884c\u4e1a\u6570")}</p>
             <p className="text-2xl font-semibold text-neutral-900 mt-1">{sorted.length}</p>
           </div>
           <div className="bg-white rounded-xl border border-neutral-200 p-4">
-            <p className="text-sm text-neutral-500">Total Brands</p>
+            <p className="text-sm text-neutral-500">{t("Total Brands", "\u603b\u54c1\u724c\u6570")}</p>
             <p className="text-2xl font-semibold text-neutral-900 mt-1">
               {sorted.reduce((sum, [, v]) => sum + v.case_count, 0)}
             </p>
           </div>
           <div className="bg-white rounded-xl border border-neutral-200 p-4">
-            <p className="text-sm text-neutral-500">Total Insights</p>
+            <p className="text-sm text-neutral-500">{t("Total Insights", "\u603b\u6d1e\u5bdf\u6570")}</p>
             <p className="text-2xl font-semibold text-neutral-900 mt-1">
               {sorted.reduce((sum, [, v]) => sum + v.insights_count, 0)}
             </p>

@@ -10,6 +10,8 @@ import {
 import {
   getIndustryDetail, getIndustryReport, type IndustryDetail,
 } from "@/lib/knowledge-api";
+import KnowledgeNav from "@/components/KnowledgeNav";
+import { useLanguage } from "@/lib/language-context";
 
 const TYPE_COLORS: Record<string, string> = {
   purchase_driver: "bg-green-100 text-green-700",
@@ -23,6 +25,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export default function IndustryDetailPage() {
+  const { t } = useLanguage();
   const params = useParams();
   const industry = decodeURIComponent(String(params.industry));
 
@@ -68,25 +71,28 @@ export default function IndustryDetailPage() {
 
   return (
     <div className="min-h-screen bg-neutral-50">
-      <header className="bg-white border-b border-neutral-200 px-6 py-4">
+      <KnowledgeNav />
+
+      {/* Sub-header */}
+      <div className="bg-white border-b border-neutral-100 px-6 py-3">
         <div className="max-w-7xl mx-auto flex items-center gap-3">
           <Link href="/industries" className="text-neutral-400 hover:text-neutral-600">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <Building2 className="w-5 h-5 text-brand-500" />
           <h1 className="text-lg font-semibold text-neutral-900 capitalize">
-            {industry.replace("_", " ")} Industry
+            {industry.replace("_", " ")} {t("Industry", "\u884c\u4e1a")}
           </h1>
           <span className="text-sm text-neutral-400">
-            {detail.cases.length} brands | {detail.total_insights} insights
+            {detail.cases.length} {t("brands", "\u4e2a\u54c1\u724c")} | {detail.total_insights} {t("insights", "\u6761\u6d1e\u5bdf")}
           </span>
         </div>
-      </header>
+      </div>
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {/* Cases table */}
         <div className="bg-white rounded-xl border border-neutral-200 p-5">
-          <h2 className="text-sm font-medium text-neutral-700 mb-4">Brand Cases</h2>
+          <h2 className="text-sm font-medium text-neutral-700 mb-4">{t("Brand Cases", "\u54c1\u724c\u6848\u4f8b")}</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -149,7 +155,7 @@ export default function IndustryDetailPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-medium text-neutral-700 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-brand-500" />
-              AI Industry Experience Report
+              {t("AI Industry Experience Report", "AI \u884c\u4e1a\u7ecf\u9a8c\u62a5\u544a")}
             </h2>
             <button
               onClick={handleGenerateReport}
@@ -161,7 +167,7 @@ export default function IndustryDetailPage() {
               ) : (
                 <Sparkles className="w-4 h-4" />
               )}
-              Generate Report
+              {t("Generate Report", "\u751f\u6210\u62a5\u544a")}
             </button>
           </div>
           {report ? (

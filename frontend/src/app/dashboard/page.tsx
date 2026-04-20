@@ -13,10 +13,13 @@ import {
   getDashboardData, getSurveyAnalytics, exportUrl,
   type DashboardData, type SurveyAnalytics,
 } from "@/lib/knowledge-api";
+import KnowledgeNav from "@/components/KnowledgeNav";
+import { useLanguage } from "@/lib/language-context";
 
 const COLORS = ["#E8652D", "#00A8B5", "#F09E72", "#585752", "#D6D3D1", "#8B6D52", "#D4B89C", "#A08B75"];
 
 export default function DashboardPage() {
+  const { t } = useLanguage();
   const [data, setData] = useState<DashboardData | null>(null);
   const [survey, setSurvey] = useState<SurveyAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,22 +92,16 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-neutral-50">
-      {/* Header */}
-      <header className="bg-white border-b border-neutral-200 px-6 py-4">
+      <KnowledgeNav />
+
+      {/* Sub-header with title + export */}
+      <div className="bg-white border-b border-neutral-100 px-6 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/knowledge"
-              className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-500 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Knowledge Base
-            </Link>
-            <span className="text-neutral-300">/</span>
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-brand-500" />
-              <h1 className="text-lg font-semibold text-neutral-900">Discovery Dashboard</h1>
-            </div>
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-brand-500" />
+            <h1 className="text-lg font-semibold text-neutral-900">
+              {t("Discovery Dashboard", "\u6570\u636e\u770b\u677f")}
+            </h1>
           </div>
           <div className="flex items-center gap-3">
             <a
@@ -112,7 +109,7 @@ export default function DashboardPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
-              Export
+              {t("Export CSV", "\u5bfc\u51fa CSV")}
             </a>
             <a
               href={exportUrl("json")}
@@ -123,7 +120,7 @@ export default function DashboardPage() {
             </a>
           </div>
         </div>
-      </header>
+      </div>
 
       <div className="max-w-7xl mx-auto px-6 py-6">
         {/* Top Stats */}

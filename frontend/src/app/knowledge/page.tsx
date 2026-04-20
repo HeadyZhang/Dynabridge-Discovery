@@ -10,15 +10,11 @@ import {
   listCases, searchKnowledge, getStats, exportUrl,
   type CaseSummary, type SearchResult, type KnowledgeStats,
 } from "@/lib/knowledge-api";
-
-const PHASE_COLORS: Record<string, string> = {
-  discovery: "bg-violet-100 text-violet-700",
-  strategy: "bg-cyan-100 text-cyan-700",
-  design: "bg-amber-100 text-amber-700",
-  marketing: "bg-green-100 text-green-700",
-};
+import KnowledgeNav from "@/components/KnowledgeNav";
+import { useLanguage } from "@/lib/language-context";
 
 export default function KnowledgePage() {
+  const { t } = useLanguage();
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -87,46 +83,34 @@ export default function KnowledgePage() {
 
   return (
     <div className="min-h-screen bg-neutral-50">
-      {/* Header */}
-      <header className="bg-white border-b border-neutral-200 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="text-neutral-400 hover:text-neutral-600 text-sm">
-              Home
-            </Link>
-            <span className="text-neutral-300">/</span>
-            <div className="flex items-center gap-2">
-              <Database className="w-5 h-5 text-brand-500" />
-              <h1 className="text-lg font-semibold text-neutral-900">Knowledge Base</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard"
-              className="px-3 py-1.5 text-sm text-neutral-600 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors"
-            >
-              Dashboard
-            </Link>
-            <a
-              href={exportUrl("csv")}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Export CSV
-            </a>
-          </div>
-        </div>
-      </header>
+      <KnowledgeNav />
 
       <div className="max-w-7xl mx-auto px-6 py-6">
+        {/* Page title + export */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <Database className="w-5 h-5 text-brand-500" />
+            <h1 className="text-lg font-semibold text-neutral-900">
+              {t("Knowledge Base", "\u6848\u4f8b\u77e5\u8bc6\u5e93")}
+            </h1>
+          </div>
+          <a
+            href={exportUrl("csv")}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            {t("Export CSV", "\u5bfc\u51fa CSV")}
+          </a>
+        </div>
+
         {/* Stats Bar */}
         {stats && (
           <div className="grid grid-cols-4 gap-4 mb-6">
             {[
-              { label: "Total Cases", value: stats.total_cases },
-              { label: "Total Files", value: stats.total_files.toLocaleString() },
-              { label: "Avg Completeness", value: `${Math.round(stats.avg_completeness * 100)}%` },
-              { label: "With Discovery", value: stats.cases_with_discovery },
+              { label: t("Total Cases", "\u603b\u6848\u4f8b\u6570"), value: stats.total_cases },
+              { label: t("Total Files", "\u603b\u6587\u4ef6\u6570"), value: stats.total_files.toLocaleString() },
+              { label: t("Avg Completeness", "\u5e73\u5747\u5b8c\u6574\u5ea6"), value: `${Math.round(stats.avg_completeness * 100)}%` },
+              { label: t("With Discovery", "\u542b\u54c1\u724c\u63a2\u7d22"), value: stats.cases_with_discovery },
             ].map((s) => (
               <div key={s.label} className="bg-white rounded-xl border border-neutral-200 p-4">
                 <p className="text-sm text-neutral-500">{s.label}</p>
@@ -139,7 +123,6 @@ export default function KnowledgePage() {
         {/* Search + Filters */}
         <div className="bg-white rounded-xl border border-neutral-200 p-4 mb-6">
           <div className="flex gap-3">
-            {/* Search */}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400" />
               <input
@@ -147,7 +130,7 @@ export default function KnowledgePage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                placeholder="Search cases by keyword, brand name, or insight..."
+                placeholder={t("Search cases by keyword, brand name, or insight...", "\u6309\u5173\u952e\u8bcd\u3001\u54c1\u724c\u540d\u6216\u6d1e\u5bdf\u641c\u7d22\u6848\u4f8b...")}
                 className="w-full pl-9 pr-3 py-2 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               />
             </div>
@@ -156,11 +139,10 @@ export default function KnowledgePage() {
               disabled={isSearching}
               className="px-4 py-2 bg-brand-500 text-white text-sm rounded-xl hover:bg-brand-600 disabled:opacity-50 transition-colors"
             >
-              {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
+              {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : t("Search", "\u641c\u7d22")}
             </button>
           </div>
 
-          {/* Filters */}
           <div className="flex items-center gap-3 mt-3">
             <Filter className="w-4 h-4 text-neutral-400" />
             <select
@@ -168,7 +150,7 @@ export default function KnowledgePage() {
               onChange={(e) => setFilterIndustry(e.target.value)}
               className="px-3 py-1.5 text-sm border border-neutral-200 rounded-lg bg-white"
             >
-              <option value="">All Industries</option>
+              <option value="">{t("All Industries", "\u6240\u6709\u884c\u4e1a")}</option>
               {industries.map((ind) => (
                 <option key={ind} value={ind}>{ind}</option>
               ))}
@@ -178,11 +160,11 @@ export default function KnowledgePage() {
               onChange={(e) => setFilterPhase(e.target.value)}
               className="px-3 py-1.5 text-sm border border-neutral-200 rounded-lg bg-white"
             >
-              <option value="">All Phases</option>
-              <option value="has_discovery">Has Discovery</option>
-              <option value="has_strategy">Has Strategy</option>
-              <option value="has_guidelines">Has Guidelines</option>
-              <option value="has_survey">Has Survey</option>
+              <option value="">{t("All Phases", "\u6240\u6709\u9636\u6bb5")}</option>
+              <option value="has_discovery">{t("Has Discovery", "\u542b\u54c1\u724c\u63a2\u7d22")}</option>
+              <option value="has_strategy">{t("Has Strategy", "\u542b\u54c1\u724c\u6218\u7565")}</option>
+              <option value="has_guidelines">{t("Has Guidelines", "\u542b\u54c1\u724c\u6307\u5357")}</option>
+              <option value="has_survey">{t("Has Survey", "\u542b\u8c03\u7814")}</option>
             </select>
           </div>
         </div>
@@ -191,7 +173,7 @@ export default function KnowledgePage() {
         {searchResults.length > 0 && (
           <div className="bg-white rounded-xl border border-neutral-200 p-4 mb-6">
             <h2 className="text-sm font-medium text-neutral-700 mb-3">
-              Search Results ({searchResults.length})
+              {t("Search Results", "\u641c\u7d22\u7ed3\u679c")} ({searchResults.length})
             </h2>
             <div className="space-y-2">
               {searchResults.map((r, i) => (
@@ -230,7 +212,6 @@ export default function KnowledgePage() {
             {cases.map((c) => (
               <Link key={c.id} href={`/knowledge/${c.id}`}>
                 <div className="bg-white rounded-xl border border-neutral-200 p-5 hover:shadow-md hover:border-brand-300 transition-all cursor-pointer group">
-                  {/* Brand name */}
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <h3 className="font-semibold text-neutral-900 group-hover:text-brand-500 transition-colors">
@@ -243,17 +224,15 @@ export default function KnowledgePage() {
                     <ArrowRight className="w-4 h-4 text-neutral-300 group-hover:text-brand-500 transition-colors" />
                   </div>
 
-                  {/* Industry tag */}
                   {c.industry && (
                     <span className="inline-block text-[10px] px-2 py-0.5 rounded bg-neutral-100 text-neutral-600 mb-3">
                       {c.industry}
                     </span>
                   )}
 
-                  {/* Completeness bar */}
                   <div className="mb-3">
                     <div className="flex items-center justify-between text-xs text-neutral-500 mb-1">
-                      <span>Completeness</span>
+                      <span>{t("Completeness", "\u5b8c\u6574\u5ea6")}</span>
                       <span className="font-medium">{Math.round(c.completeness_score * 100)}%</span>
                     </div>
                     <div className="w-full h-1.5 bg-neutral-100 rounded-full overflow-hidden">
@@ -264,7 +243,6 @@ export default function KnowledgePage() {
                     </div>
                   </div>
 
-                  {/* Phase badges */}
                   <div className="flex flex-wrap gap-1.5 mb-3">
                     {c.has_discovery && (
                       <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-600">
@@ -283,14 +261,13 @@ export default function KnowledgePage() {
                     )}
                     {!c.has_discovery && !c.has_strategy && (
                       <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-500">
-                        <XCircle className="w-3 h-3" /> Incomplete
+                        <XCircle className="w-3 h-3" /> {t("Incomplete", "\u4e0d\u5b8c\u6574")}
                       </span>
                     )}
                   </div>
 
-                  {/* Meta */}
                   <div className="flex items-center gap-4 text-[11px] text-neutral-400">
-                    <span>{c.total_files} files</span>
+                    <span>{c.total_files} {t("files", "\u4e2a\u6587\u4ef6")}</span>
                     <span>{c.total_size_mb.toFixed(0)} MB</span>
                   </div>
                 </div>
