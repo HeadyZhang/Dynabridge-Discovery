@@ -601,6 +601,105 @@ def _get_challenges(case: CaseProject) -> list[str]:
         return []
 
 
+# ── Marketing Intelligence ────────────────────────────────
+
+
+@router.get("/market-intelligence")
+def get_market_intelligence(
+    brand: Optional[str] = Query(None),
+    industry: Optional[str] = Query(None),
+    market: str = Query("US"),
+    keywords: str = Query(""),
+):
+    """GEO trends + consumer insights → marketing intelligence."""
+    keyword_list = [k.strip() for k in keywords.split(",") if k.strip()] or [industry or brand or "brand"]
+
+    # 1. Google Trends
+    trends: dict = {}
+    try:
+        from module_b.google_trends import GoogleTrendsClient
+        gt = GoogleTrendsClient()
+        trends["interest_over_time"] = gt.get_interest_over_time(keyword_list, geo=market)
+        trends["related_queries"] = gt.get_related_queries(keyword_list[0], geo=market)
+        trends["regional_interest"] = gt.get_interest_by_region(keyword_list[0], geo=market)
+    except Exception as e:
+        trends["error"] = str(e)
+
+    # 2. Consumer Insights
+    db = _get_db()
+    insights_query = db.query(ConsumerInsight)
+    if industry:
+        insights_query = insights_query.filter(ConsumerInsight.industry == industry)
+    insights = insights_query.limit(20).all()
+    insights_data = [
+        {"brand": i.brand_name, "text": i.insight_text, "type": i.insight_type}
+        for i in insights
+    ]
+    db.close()
+
+    # 3. AI Marketing Strategy
+    strategy: dict = {}
+    try:
+        import anthropic
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": f"""你是品牌营销策略专家。基于以下数据为品牌制定营销策略。
+
+品牌: {brand or 'Unknown'}
+行业: {industry or 'Unknown'}
+目标市场: {market}
+搜索关键词: {keywords}
+
+Google Trends 数据:
+- 平均搜索热度: {trends.get('interest_over_time', {}).get('averages', {})}
+- 相关搜索: {trends.get('related_queries', {}).get('top', [])[:5]}
+- 热门地区: {trends.get('regional_interest', [])[:5]}
+
+消费者洞察 ({len(insights_data)} 条):
+{chr(10).join([f"[{i['brand']}] {i['text']}" for i in insights_data[:10]])}
+
+请输出 JSON 格式的营销策略建议:
+{{
+  "executive_summary": "一段话总结",
+  "content_strategy": {{"recommended": ["...", "..."], "avoid": ["..."], "rationale": "..."}},
+  "channel_strategy": {{"primary": ["..."], "secondary": ["..."], "rationale": "..."}},
+  "timing_strategy": {{"peak_months": ["..."], "rationale": "..."}},
+  "geo_strategy": {{"priority_regions": ["..."], "rationale": "..."}},
+  "keyword_strategy": {{"primary": ["..."], "long_tail": ["..."], "rationale": "..."}}
+}}
+
+只输出 JSON。"""}],
+        )
+        text = response.content[0].text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0]
+        strategy = json.loads(text)
+    except Exception as e:
+        strategy = {"error": str(e)}
+
+    return {
+        "brand": brand,
+        "industry": industry,
+        "market": market,
+        "trends": trends,
+        "insights": insights_data,
+        "strategy": strategy,
+    }
+
+
+@router.get("/market-intelligence/export")
+def export_marketing_report(
+    brand: str = Query(...),
+    industry: str = Query(...),
+    market: str = Query("US"),
+    keywords: str = Query(""),
+):
+    """Export marketing intelligence as JSON."""
+    return get_market_intelligence(brand=brand, industry=industry, market=market, keywords=keywords)
+
+
 @router.get("/survey-analytics")
 def survey_analytics():
     """Questionnaire analytics overview — survey files, response data, cross-case stats."""
