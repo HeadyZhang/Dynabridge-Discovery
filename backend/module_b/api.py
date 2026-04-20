@@ -37,6 +37,8 @@ def list_cases(
     industry: Optional[str] = Query(None),
     has_discovery: Optional[bool] = Query(None),
     has_strategy: Optional[bool] = Query(None),
+    has_guidelines: Optional[bool] = Query(None),
+    has_survey: Optional[bool] = Query(None),
     challenge_type: Optional[str] = Query(None),
     segment: Optional[str] = Query(None),
 ):
@@ -54,6 +56,10 @@ def list_cases(
         q = q.filter(CaseProject.has_discovery == (1 if has_discovery else 0))
     if has_strategy is not None:
         q = q.filter(CaseProject.has_strategy == (1 if has_strategy else 0))
+    if has_guidelines is not None:
+        q = q.filter(CaseProject.has_guidelines == (1 if has_guidelines else 0))
+    if has_survey is not None:
+        q = q.filter(CaseProject.has_survey == (1 if has_survey else 0))
     if challenge_type:
         q = q.filter(CaseProject.ai_tags_json.ilike(f"%{challenge_type}%"))
     if segment:
@@ -101,6 +107,13 @@ def search_cases(
     """
     results = []
 
+    def _extract_case_id(doc_id: str) -> int | None:
+        """Extract numeric case_id from doc_id like 'case_5_file_...'."""
+        parts = doc_id.split("_")
+        if len(parts) >= 2 and parts[0] == "case" and parts[1].isdigit():
+            return int(parts[1])
+        return None
+
     if mode in ("fts", "hybrid"):
         fts = FullTextIndex()
         fts_results = fts.search(q, limit=limit)
@@ -108,6 +121,7 @@ def search_cases(
             results.append({
                 "source": "fts",
                 "doc_id": r["doc_id"],
+                "case_id": _extract_case_id(r["doc_id"]),
                 "brand_name": r["brand_name"],
                 "filename": r["filename"],
                 "snippet": r["snippet"],
@@ -123,6 +137,7 @@ def search_cases(
                 results.append({
                     "source": "vector",
                     "doc_id": r["doc_id"],
+                    "case_id": _extract_case_id(r["doc_id"]),
                     "brand_name": r["brand_name"],
                     "filename": r["filename"],
                     "snippet": "",

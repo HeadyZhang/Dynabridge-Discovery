@@ -26,7 +26,7 @@ export default function KnowledgePage() {
   const [isSearching, setIsSearching] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filterIndustry, setFilterIndustry] = useState("");
-  const [filterDiscovery, setFilterDiscovery] = useState<boolean | undefined>(undefined);
+  const [filterPhase, setFilterPhase] = useState("");
 
   useEffect(() => {
     loadData();
@@ -63,10 +63,14 @@ export default function KnowledgePage() {
   const handleFilter = async () => {
     setLoading(true);
     try {
-      const data = await listCases({
+      const params: Parameters<typeof listCases>[0] = {
         industry: filterIndustry || undefined,
-        has_discovery: filterDiscovery,
-      });
+      };
+      if (filterPhase === "has_discovery") params.has_discovery = true;
+      if (filterPhase === "has_strategy") params.has_strategy = true;
+      if (filterPhase === "has_guidelines") params.has_guidelines = true;
+      if (filterPhase === "has_survey") params.has_survey = true;
+      const data = await listCases(params);
       setCases(data);
     } catch {
       // silently handle
@@ -77,7 +81,7 @@ export default function KnowledgePage() {
 
   useEffect(() => {
     handleFilter();
-  }, [filterIndustry, filterDiscovery]);
+  }, [filterIndustry, filterPhase]);
 
   const industries = stats ? Object.keys(stats.industries) : [];
 
@@ -170,15 +174,15 @@ export default function KnowledgePage() {
               ))}
             </select>
             <select
-              value={filterDiscovery === undefined ? "" : String(filterDiscovery)}
-              onChange={(e) =>
-                setFilterDiscovery(e.target.value === "" ? undefined : e.target.value === "true")
-              }
+              value={filterPhase}
+              onChange={(e) => setFilterPhase(e.target.value)}
               className="px-3 py-1.5 text-sm border border-neutral-200 rounded-lg bg-white"
             >
               <option value="">All Phases</option>
-              <option value="true">Has Discovery</option>
-              <option value="false">No Discovery</option>
+              <option value="has_discovery">Has Discovery</option>
+              <option value="has_strategy">Has Strategy</option>
+              <option value="has_guidelines">Has Guidelines</option>
+              <option value="has_survey">Has Survey</option>
             </select>
           </div>
         </div>
@@ -191,7 +195,11 @@ export default function KnowledgePage() {
             </h2>
             <div className="space-y-2">
               {searchResults.map((r, i) => (
-                <div key={i} className="flex items-start gap-3 p-3 rounded-lg hover:bg-neutral-50">
+                <Link
+                  key={i}
+                  href={r.case_id ? `/knowledge/${r.case_id}` : "#"}
+                  className="flex items-start gap-3 p-3 rounded-lg hover:bg-brand-50 cursor-pointer transition-colors border border-transparent hover:border-brand-200"
+                >
                   <FileText className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -205,7 +213,8 @@ export default function KnowledgePage() {
                       />
                     )}
                   </div>
-                </div>
+                  <ArrowRight className="w-4 h-4 text-neutral-300 mt-0.5 shrink-0" />
+                </Link>
               ))}
             </div>
           </div>

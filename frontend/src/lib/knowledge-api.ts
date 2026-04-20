@@ -42,6 +42,7 @@ export interface SimilarCase extends CaseSummary {
 export interface SearchResult {
   source: string;
   doc_id: string;
+  case_id: number | null;
   brand_name: string;
   filename: string;
   snippet: string;
@@ -73,6 +74,8 @@ export async function listCases(params?: {
   industry?: string;
   has_discovery?: boolean;
   has_strategy?: boolean;
+  has_guidelines?: boolean;
+  has_survey?: boolean;
 }): Promise<CaseSummary[]> {
   const searchParams = new URLSearchParams();
   if (params?.industry) searchParams.set("industry", params.industry);
@@ -80,6 +83,10 @@ export async function listCases(params?: {
     searchParams.set("has_discovery", String(params.has_discovery));
   if (params?.has_strategy !== undefined)
     searchParams.set("has_strategy", String(params.has_strategy));
+  if (params?.has_guidelines !== undefined)
+    searchParams.set("has_guidelines", String(params.has_guidelines));
+  if (params?.has_survey !== undefined)
+    searchParams.set("has_survey", String(params.has_survey));
   const qs = searchParams.toString();
   const res = await fetch(`${API_BASE}/api/knowledge/cases${qs ? `?${qs}` : ""}`);
   return res.json();
