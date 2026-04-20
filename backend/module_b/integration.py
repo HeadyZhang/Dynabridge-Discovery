@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from config import DB_PATH
 from models import Base, Project
-from module_b.models import CaseProject, DiscoveryEngagement, DiscoverySegment
+from module_b.models import CaseProject, ConsumerInsight, DiscoveryEngagement, DiscoverySegment
 
 _engine = create_engine(f"sqlite:///{DB_PATH}", echo=False)
 Base.metadata.create_all(_engine)
@@ -133,10 +133,41 @@ async def on_project_approved(project_id: int) -> dict:
 
         db.commit()
 
+    # 4. Extract ConsumerInsight records from analysis
+    insights_created = 0
+    key_insights = analysis.get("key_insights", [])
+    core_challenges = analysis.get("core_challenges", [])
+    all_raw = key_insights + core_challenges
+
+    if all_raw:
+        # Clear existing insights for this case from Module A
+        db.query(ConsumerInsight).filter_by(case_id=case_id).delete()
+        db.commit()
+
+        industry = analysis.get("industry_trends", {}).get("category_name", "")
+        for text in all_raw:
+            if not text or len(str(text)) < 10:
+                continue
+            insight = ConsumerInsight(
+                case_id=case_id,
+                brand_name=brand_name,
+                industry=industry,
+                insight_text=str(text),
+                insight_type="perception",
+                evidence_source="competitive",
+                confidence="medium",
+                geo_market="us",
+            )
+            db.add(insight)
+            insights_created += 1
+
+        db.commit()
+
     db.close()
     return {
         "status": "created" if not existing else "updated",
         "case_project_id": case_id,
         "engagement_id": engagement_id,
         "segments_created": segments_created,
+        "insights_created": insights_created,
     }

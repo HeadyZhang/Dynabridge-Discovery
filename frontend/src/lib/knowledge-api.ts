@@ -155,6 +155,129 @@ export function exportUrl(format: "csv" | "json" = "csv"): string {
   return `${API_BASE}/api/knowledge/export?format=${format}`;
 }
 
+export interface ConsumerInsightData {
+  id: number;
+  case_id: number;
+  brand_name: string;
+  industry: string;
+  text: string;
+  type: string;
+  segment: string | null;
+  source: string;
+  geo: string;
+  confidence: string;
+}
+
+export interface InsightsResponse {
+  total: number;
+  insights: ConsumerInsightData[];
+}
+
+export interface SynthesisResponse {
+  synthesis: string;
+  insights_count: number;
+  filters: Record<string, string | null>;
+}
+
+export async function getConsumerInsights(params?: {
+  q?: string;
+  industry?: string;
+  insight_type?: string;
+  geo?: string;
+  limit?: number;
+}): Promise<InsightsResponse> {
+  const sp = new URLSearchParams();
+  if (params?.q) sp.set("q", params.q);
+  if (params?.industry) sp.set("industry", params.industry);
+  if (params?.insight_type) sp.set("insight_type", params.insight_type);
+  if (params?.geo) sp.set("geo", params.geo);
+  if (params?.limit) sp.set("limit", String(params.limit));
+  const qs = sp.toString();
+  const res = await fetch(`${API_BASE}/api/knowledge/insights${qs ? `?${qs}` : ""}`);
+  return res.json();
+}
+
+export async function getSynthesis(params?: {
+  industry?: string;
+  insight_type?: string;
+  geo?: string;
+}): Promise<SynthesisResponse> {
+  const sp = new URLSearchParams();
+  if (params?.industry) sp.set("industry", params.industry);
+  if (params?.insight_type) sp.set("insight_type", params.insight_type);
+  if (params?.geo) sp.set("geo", params.geo);
+  const qs = sp.toString();
+  const res = await fetch(`${API_BASE}/api/knowledge/insights/synthesis${qs ? `?${qs}` : ""}`);
+  return res.json();
+}
+
+export interface IndustryOverview {
+  [industry: string]: {
+    case_count: number;
+    brands: string[];
+    challenges: string[];
+    insights_count: number;
+  };
+}
+
+export interface IndustryDetail {
+  industry: string;
+  cases: {
+    id: number;
+    brand: string;
+    completeness: number;
+    has_discovery: boolean;
+    has_strategy: boolean;
+    challenges: string[];
+  }[];
+  insights: { text: string; type: string; brand: string }[];
+  total_insights: number;
+}
+
+export async function getIndustries(): Promise<IndustryOverview> {
+  const res = await fetch(`${API_BASE}/api/knowledge/industries`);
+  return res.json();
+}
+
+export async function getIndustryDetail(industry: string): Promise<IndustryDetail> {
+  const res = await fetch(`${API_BASE}/api/knowledge/industries/${encodeURIComponent(industry)}`);
+  return res.json();
+}
+
+export async function getIndustryReport(industry: string): Promise<{ report: string; case_count: number; insight_count: number }> {
+  const res = await fetch(`${API_BASE}/api/knowledge/industries/${encodeURIComponent(industry)}/report`);
+  return res.json();
+}
+
+export async function compareIndustries(industries: string[]): Promise<Record<string, unknown>> {
+  const res = await fetch(`${API_BASE}/api/knowledge/industries/compare?industries=${industries.join(",")}`);
+  return res.json();
+}
+
+export interface MarketIntelligence {
+  brand: string | null;
+  industry: string | null;
+  market: string;
+  trends: Record<string, unknown>;
+  insights: { brand: string; text: string; type: string }[];
+  strategy: Record<string, unknown>;
+}
+
+export async function getMarketIntelligence(params: {
+  brand?: string;
+  industry?: string;
+  market?: string;
+  keywords?: string;
+}): Promise<MarketIntelligence> {
+  const sp = new URLSearchParams();
+  if (params.brand) sp.set("brand", params.brand);
+  if (params.industry) sp.set("industry", params.industry);
+  if (params.market) sp.set("market", params.market);
+  if (params.keywords) sp.set("keywords", params.keywords);
+  const res = await fetch(`${API_BASE}/api/knowledge/market-intelligence?${sp.toString()}`);
+  return res.json();
+}
+
 export function driveFileUrl(driveFileId: string): string {
   return `https://drive.google.com/file/d/${driveFileId}/view`;
 }

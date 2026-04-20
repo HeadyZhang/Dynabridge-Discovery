@@ -18,6 +18,7 @@ from models import Base
 from module_b.models import (
     CaseProject, CaseFile, DiscoveryEngagement, DiscoverySegment,
     DiscoveryQuestionnaire, QuestionnaireResponse, CrossTabulation,
+    ConsumerInsight, MarketGeoData,
 )
 from module_b.search_index import FullTextIndex
 
@@ -354,45 +355,104 @@ def get_dashboard_data():
 def list_insights(
     q: Optional[str] = Query(None),
     industry: Optional[str] = Query(None),
+    insight_type: Optional[str] = Query(None),
+    geo: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=500),
 ):
-    """Strategic insight explorer — browse insights across all cases."""
+    """Cross-case Consumer Insight search — reads from ConsumerInsight table."""
     db = _get_db()
-    query = db.query(CaseProject).filter(CaseProject.ai_tags_json.isnot(None))
+    query = db.query(ConsumerInsight)
     if industry:
-        query = query.filter(CaseProject.industry.ilike(f"%{industry}%"))
-    cases = query.all()
-
-    all_insights = []
-    for case in cases:
-        try:
-            tags = json.loads(case.ai_tags_json) if case.ai_tags_json else {}
-        except (json.JSONDecodeError, TypeError):
-            continue
-
-        for insight in tags.get("key_insights", []):
-            all_insights.append({
-                "case_id": case.id,
-                "brand_name": case.brand_name,
-                "industry": case.industry or "",
-                "insight": insight,
-                "type": "insight",
-            })
-        for challenge in tags.get("core_challenges", []):
-            all_insights.append({
-                "case_id": case.id,
-                "brand_name": case.brand_name,
-                "industry": case.industry or "",
-                "insight": challenge,
-                "type": "challenge",
-            })
-
+        query = query.filter(ConsumerInsight.industry == industry)
+    if insight_type:
+        query = query.filter(ConsumerInsight.insight_type == insight_type)
+    if geo:
+        query = query.filter(ConsumerInsight.geo_market == geo)
     if q:
-        q_lower = q.lower()
-        all_insights = [i for i in all_insights if q_lower in i["insight"].lower()]
+        query = query.filter(ConsumerInsight.insight_text.ilike(f"%{q}%"))
 
+    total = query.count()
+    insights = query.limit(limit).all()
     db.close()
-    return {"total": len(all_insights), "insights": all_insights[:limit]}
+    return {
+        "total": total,
+        "insights": [
+            {
+                "id": i.id,
+                "case_id": i.case_id,
+                "brand_name": i.brand_name,
+                "industry": i.industry,
+                "text": i.insight_text,
+                "type": i.insight_type,
+                "segment": i.target_segment,
+                "source": i.evidence_source,
+                "geo": i.geo_market,
+                "confidence": i.confidence,
+            }
+            for i in insights
+        ],
+    }
+
+
+@router.get("/insights/synthesis")
+def synthesize_insights(
+    industry: Optional[str] = Query(None),
+    insight_type: Optional[str] = Query(None),
+    geo: Optional[str] = Query(None),
+):
+    """AI cross-case insight synthesis."""
+    db = _get_db()
+    query = db.query(ConsumerInsight)
+    if industry:
+        query = query.filter(ConsumerInsight.industry == industry)
+    if insight_type:
+        query = query.filter(ConsumerInsight.insight_type == insight_type)
+    if geo:
+        query = query.filter(ConsumerInsight.geo_market == geo)
+
+    insights = query.all()
+    db.close()
+
+    if not insights:
+        return {"synthesis": "No insights found for the given filters.", "insights_count": 0}
+
+    insights_text = "\n".join(
+        f"[{i.brand_name}/{i.industry}] {i.insight_text}"
+        for i in insights[:30]
+    )
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1000,
+            messages=[{
+                "role": "user",
+                "content": f"""分析以下来自不同品牌项目的消费者洞察，生成一份跨案例综合分析。
+
+{insights_text}
+
+要求：
+1. 识别跨品牌的共性发现（3-5 条）
+2. 标出行业间的关键差异
+3. 给出对新项目的建议
+4. 用中英双语输出
+
+只输出分析文字，不需要 JSON。"""
+            }],
+        )
+        synthesis = response.content[0].text
+    except Exception:
+        from collections import Counter
+        type_counts = Counter(i.insight_type for i in insights)
+        synthesis = f"共 {len(insights)} 条洞察，类型分布: {dict(type_counts)}"
+
+    return {
+        "synthesis": synthesis,
+        "insights_count": len(insights),
+        "filters": {"industry": industry, "type": insight_type, "geo": geo},
+    }
 
 
 @router.get("/survey-analytics")

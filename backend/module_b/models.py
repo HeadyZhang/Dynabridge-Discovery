@@ -156,3 +156,45 @@ class CrossTabulation(Base):
     statistical_significance = Column(Float, default=0.0)  # p-value
     sample_size = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+# ── Consumer Insights ────────────────────────────────────
+
+class ConsumerInsight(Base):
+    """Structured consumer insight extracted from case analysis."""
+    __tablename__ = "consumer_insights"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    case_id = Column(Integer, ForeignKey("case_projects.id"))
+    brand_name = Column(String(255))
+    industry = Column(String(200))
+
+    insight_text = Column(Text)
+    insight_type = Column(String(50))       # purchase_driver / barrier / need_state /
+                                            # perception / behavior / attitude / pricing / channel
+    target_segment = Column(String(255), nullable=True)
+    evidence_source = Column(String(50))    # survey / review / social / interview / competitive
+    confidence = Column(String(20))         # high / medium / low
+    geo_market = Column(String(50), nullable=True)  # us / europe / global / china
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    case_project = relationship("CaseProject")
+
+
+# ── Market Geo Data (Phase 3) ────────────────────────────
+
+class MarketGeoData(Base):
+    """Geographic market data for a case/brand."""
+    __tablename__ = "market_geo_data"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    case_id = Column(Integer, ForeignKey("case_projects.id"))
+    brand_name = Column(String(255))
+    target_market = Column(String(50))       # us / europe / japan / southeast_asia
+    primary_channels = Column(Text, default="[]")  # JSON array
+    key_regions = Column(Text, default="[]")       # JSON array
+    search_trends_json = Column(Text, default="{}")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    case_project = relationship("CaseProject")
