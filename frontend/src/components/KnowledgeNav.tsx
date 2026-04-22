@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: "/industries", label_en: "Industries", label_cn: "\u884c\u4e1a\u5206\u6790" },
   { href: "/marketing", label_en: "Marketing Intelligence", label_cn: "\u8425\u9500\u60c5\u62a5" },
   { href: "/dashboard", label_en: "Dashboard", label_cn: "\u6570\u636e\u770b\u677f" },
+  { href: "/datacube", label_en: "Datacube", label_cn: "\u6570\u636e\u7acb\u65b9" },
 ];
 
 export default function KnowledgeNav() {

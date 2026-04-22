@@ -566,6 +566,12 @@ try:
 except ImportError:
     pass  # Module B not installed
 
+try:
+    from module_b.datacube_api import router as datacube_router
+    app.include_router(datacube_router)
+except ImportError:
+    pass
+
 
 # ─── Module A → B Integration ───────────────────────────────
 
