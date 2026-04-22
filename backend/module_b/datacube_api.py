@@ -444,6 +444,14 @@ def get_attribution(
 # ── Insights ──────────────────────────────────────────────
 
 
+@router.post("/insights/generate")
+async def generate_insights_endpoint(brand: str = Query(...)):
+    """Run AI insight engine for a brand."""
+    from module_b.datacube_insight_engine import generate_insights
+    insights = await generate_insights(brand)
+    return {"generated": len(insights), "insights": insights}
+
+
 @router.get("/insights")
 def list_insights(
     brand: Optional[str] = Query(None),
