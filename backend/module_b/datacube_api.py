@@ -488,6 +488,65 @@ def get_recommendations(brand: str = Query(...)):
 # ── Learnings ─────────────────────────────────────────────
 
 
+@router.post("/learnings/consolidate")
+async def consolidate_learnings(brand: str = Query(...)):
+    """Distill validated insights into cumulative learnings."""
+    db = _get_db()
+    insights = db.query(DatacubeInsight).filter(
+        DatacubeInsight.brand_name == brand,
+        DatacubeInsight.confidence.in_(["high", "medium"]),
+    ).all()
+
+    # Group insights by (audience, content, channel) pattern
+    from collections import defaultdict
+    patterns: dict[str, list[DatacubeInsight]] = defaultdict(list)
+    for ins in insights:
+        key = f"{ins.audience_segment or ''}|{ins.content_theme or ''}|{ins.channel or ''}"
+        patterns[key].append(ins)
+
+    created = 0
+    updated = 0
+    for key, group in patterns.items():
+        if len(group) < 1:
+            continue
+        parts = key.split("|")
+        audiences = [parts[0]] if parts[0] else []
+        content = [parts[1]] if parts[1] else []
+        channels = [parts[2]] if parts[2] else []
+
+        # Check for existing learning with same pattern
+        existing = db.query(Learning).filter(
+            Learning.brand_name == brand,
+            Learning.applicable_audiences.contains(json.dumps(audiences)) if audiences else True,
+        ).first()
+
+        if existing:
+            existing.evidence_count = len(group)
+            existing.last_validated = _now()
+            updated += 1
+        else:
+            # Generate principle from best finding
+            best = max(group, key=lambda i: {"high": 3, "medium": 2, "low": 1}.get(i.confidence, 0))
+            learning = Learning(
+                brand_name=brand,
+                principle=best.finding,
+                evidence_count=len(group),
+                first_observed=_now(),
+                last_validated=_now(),
+                applicable_audiences=json.dumps(audiences),
+                applicable_content=json.dumps(content),
+                applicable_channels=json.dumps(channels),
+                applicable_geos=json.dumps([]),
+                status="active",
+            )
+            db.add(learning)
+            created += 1
+
+    db.commit()
+    db.close()
+    return {"created": created, "updated": updated, "total_patterns": len(patterns)}
+
+
 @router.get("/learnings")
 def list_learnings(brand: Optional[str] = Query(None)):
     db = _get_db()
@@ -498,6 +557,136 @@ def list_learnings(brand: Optional[str] = Query(None)):
     result = [_learning_dict(le) for le in learnings]
     db.close()
     return result
+
+
+# ── Planning ───────────────────────────────────────────
+
+
+@router.post("/plan")
+async def plan_campaign(body: dict = Body(...)):
+    """AI Campaign Planning assistant — uses learnings + trends + insights."""
+    brand = body.get("brand", "")
+    objective = body.get("objective", "")
+    budget = body.get("budget", 0)
+    target_audience = body.get("target_audience", "")
+
+    db = _get_db()
+    learnings = db.query(Learning).filter(Learning.brand_name == brand, Learning.status == "active").all()
+    insights = db.query(DatacubeInsight).filter(
+        DatacubeInsight.brand_name == brand,
+        DatacubeInsight.action_type == "scale",
+    ).limit(5).all()
+
+    # Best performing combos
+    campaigns = db.query(Campaign).filter(Campaign.brand_name == brand).all()
+    best_combos = []
+    for c in campaigns:
+        aud = c.audience_tags[0] if c.audience_tags else None
+        con = c.content_tags[0] if c.content_tags else None
+        ctx = c.context_tags[0] if c.context_tags else None
+        total_rev = sum(p.revenue for p in c.performances)
+        total_cost = sum(p.cost for p in c.performances)
+        roas = round(total_rev / total_cost, 2) if total_cost > 0 else 0
+        if roas > 2:
+            best_combos.append({
+                "audience": aud.segment if aud else "",
+                "content": con.theme if con else "",
+                "channel": ctx.channel if ctx else "",
+                "roas": roas,
+            })
+    best_combos.sort(key=lambda x: x["roas"], reverse=True)
+    db.close()
+
+    # Build plan with Claude
+    try:
+        import anthropic
+        client = anthropic.Anthropic()
+
+        learnings_text = "\n".join(f"- {l.principle} (validated {l.evidence_count}x)" for l in learnings[:10])
+        combos_text = "\n".join(f"- {c['audience']} + {c['content']} on {c['channel']}: {c['roas']}x ROAS" for c in best_combos[:5])
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": f"""You are a marketing strategist for brand {brand}.
+
+Objective: {objective}
+Budget: ${budget}
+Target audience: {target_audience}
+
+Past learnings:
+{learnings_text or 'No learnings yet'}
+
+Best performing combinations:
+{combos_text or 'No historical data'}
+
+Generate a campaign plan as JSON:
+{{
+  "executive_summary": "Brief strategy overview",
+  "channel_allocation": {{
+    "channel_name": {{"budget_pct": 40, "rationale": "..."}}
+  }},
+  "content_recommendations": ["recommendation 1", "recommendation 2"],
+  "timing_recommendations": ["recommendation 1"],
+  "past_learnings_applied": ["Learning referenced"],
+  "what_to_test": ["New combination to test"]
+}}
+
+Output JSON only."""}],
+        )
+        text = response.content[0].text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0]
+        return json.loads(text)
+    except Exception as e:
+        return {
+            "executive_summary": f"Auto-plan unavailable ({e}). Based on {len(best_combos)} high-performing combos.",
+            "channel_allocation": {c["channel"]: {"budget_pct": round(100 / max(len(best_combos), 1)), "rationale": f"{c['roas']}x ROAS"} for c in best_combos[:4]},
+            "content_recommendations": [f"Focus on {c['content']} for {c['audience']}" for c in best_combos[:3]],
+            "what_to_test": [],
+            "past_learnings_applied": [l.principle for l in learnings[:3]],
+        }
+
+
+@router.post("/campaigns/{campaign_id}/debrief")
+async def debrief_campaign(campaign_id: str):
+    """Post-campaign debrief — summarize, compare, generate insights."""
+    db = _get_db()
+    c = db.query(Campaign).get(campaign_id)
+    if not c:
+        db.close()
+        raise HTTPException(404, "Campaign not found")
+
+    performances = c.performances
+    total_imp = sum(p.impressions for p in performances)
+    total_rev = sum(p.revenue for p in performances)
+    total_cost = sum(p.cost for p in performances)
+    roas = round(total_rev / total_cost, 2) if total_cost > 0 else 0
+
+    # Compare with similar campaigns
+    all_perfs = db.query(Performance).all()
+    avg_roas = sum(p.revenue for p in all_perfs) / max(sum(p.cost for p in all_perfs), 1)
+
+    db.close()
+
+    # Generate new insights for this campaign's brand
+    from module_b.datacube_insight_engine import generate_insights
+    new_insights = await generate_insights(c.brand_name)
+
+    return {
+        "campaign": c.campaign_name,
+        "summary": {
+            "impressions": total_imp,
+            "revenue": total_rev,
+            "cost": total_cost,
+            "roas": roas,
+        },
+        "vs_average": {
+            "roas_diff": round(roas - avg_roas, 2),
+            "performance": "above_average" if roas > avg_roas else "below_average",
+        },
+        "new_insights_generated": len(new_insights),
+    }
 
 
 # ── Helpers ───────────────────────────────────────────────
