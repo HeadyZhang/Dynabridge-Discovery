@@ -391,6 +391,7 @@ def list_insights(
                 "brand_name": i.brand_name,
                 "industry": i.industry,
                 "text": i.insight_text,
+                "text_en": i.insight_text_en,
                 "type": i.insight_type,
                 "segment": i.target_segment,
                 "source": i.evidence_source,

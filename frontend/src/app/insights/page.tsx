@@ -231,7 +231,7 @@ export default function InsightsPage() {
                     onClick={() => setExpandedId(expandedId === insight.id ? null : insight.id)}
                   >
                     <p className="text-sm text-neutral-800 leading-relaxed mb-3">
-                      {insight.text}
+                      {lang === "en" && insight.text_en ? insight.text_en : insight.text}
                     </p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <Link

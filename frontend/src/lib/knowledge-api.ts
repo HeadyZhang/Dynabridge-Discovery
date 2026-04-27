@@ -162,6 +162,7 @@ export interface ConsumerInsightData {
   brand_name: string;
   industry: string;
   text: string;
+  text_en: string | null;
   type: string;
   segment: string | null;
   source: string;

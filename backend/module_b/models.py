@@ -170,6 +170,7 @@ class ConsumerInsight(Base):
     industry = Column(String(200))
 
     insight_text = Column(Text)
+    insight_text_en = Column(Text, nullable=True)  # English translation
     insight_type = Column(String(50))       # purchase_driver / barrier / need_state /
                                             # perception / behavior / attitude / pricing / channel
     target_segment = Column(String(255), nullable=True)
