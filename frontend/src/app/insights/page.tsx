@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Search, Filter, Lightbulb, Sparkles, Database, Loader2, Tag,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import {
   getConsumerInsights, getSynthesis, getStats,
   type ConsumerInsightData, type KnowledgeStats,
@@ -211,8 +212,8 @@ export default function InsightsPage() {
                 <h3 className="text-sm font-medium text-brand-700 mb-2 flex items-center gap-2">
                   <Sparkles className="w-4 h-4" /> {t("AI Cross-Case Synthesis", "AI \u8de8\u6848\u4f8b\u7efc\u5408\u5206\u6790")}
                 </h3>
-                <div className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed">
-                  {synthesis}
+                <div className="prose prose-sm max-w-none text-neutral-700">
+                  <ReactMarkdown>{synthesis}</ReactMarkdown>
                 </div>
               </div>
             )}

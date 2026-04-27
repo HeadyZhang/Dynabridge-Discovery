@@ -7,6 +7,7 @@ import {
   ArrowLeft, Building2, Lightbulb, Sparkles, Loader2, FileText,
   CheckCircle2, XCircle,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import {
   getIndustryDetail, getIndustryReport, type IndustryDetail,
 } from "@/lib/knowledge-api";
@@ -171,8 +172,8 @@ export default function IndustryDetailPage() {
             </button>
           </div>
           {report ? (
-            <div className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed bg-neutral-50 rounded-lg p-4 max-h-[600px] overflow-y-auto">
-              {report}
+            <div className="prose prose-sm max-w-none text-neutral-700 bg-neutral-50 rounded-lg p-4 max-h-[600px] overflow-y-auto">
+              <ReactMarkdown>{report}</ReactMarkdown>
             </div>
           ) : (
             <p className="text-sm text-neutral-400">
