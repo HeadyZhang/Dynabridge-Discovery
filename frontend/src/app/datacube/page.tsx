@@ -35,10 +35,17 @@ export default function DatacubeDashboard() {
     <div className="min-h-screen bg-neutral-50">
       <KnowledgeNav />
       <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="flex items-center gap-2 mb-6">
+        <div className="flex items-center gap-2 mb-4">
           <Box className="w-5 h-5 text-brand-500" />
           <h1 className="text-lg font-semibold text-neutral-900">Datacube</h1>
           <span className="text-sm text-neutral-400">{t("Decision-Making Engine", "\u51b3\u7b56\u5f15\u64ce")}</span>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 text-sm text-yellow-800">
+          {t(
+            "\u26a0\ufe0f Currently showing sample data for demonstration. Import real campaign data via CSV or connect ad platform APIs for live metrics.",
+            "\u26a0\ufe0f \u5f53\u524d\u663e\u793a\u7684\u662f\u793a\u4f8b\u6570\u636e\u3002\u8bf7\u901a\u8fc7 CSV \u5bfc\u5165\u771f\u5b9e campaign \u6570\u636e\uff0c\u6216\u8fde\u63a5\u5e7f\u544a\u5e73\u53f0 API \u83b7\u53d6\u5b9e\u65f6\u6307\u6807\u3002"
+          )}
         </div>
 
         {/* Key Metrics */}
