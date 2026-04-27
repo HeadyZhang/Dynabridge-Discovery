@@ -26,7 +26,7 @@ const MARKETS = [
 ];
 
 export default function MarketingPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
   const [selectedBrand, setSelectedBrand] = useState("");
@@ -52,6 +52,7 @@ export default function MarketingPage() {
         industry: selectedIndustry || undefined,
         market: selectedMarket,
         keywords: keywords || undefined,
+        lang: lang === "en" ? "en" : "cn",
       });
       setData(result);
     } catch {
@@ -87,7 +88,7 @@ export default function MarketingPage() {
               onChange={(e) => setSelectedBrand(e.target.value)}
               className="px-3 py-2 text-sm border border-neutral-200 rounded-lg bg-white"
             >
-              <option value="">Select Brand</option>
+              <option value="">{t("Select Brand", "\u9009\u62e9\u54c1\u724c")}</option>
               {cases.map((c) => (
                 <option key={c.id} value={c.brand_name}>{c.brand_name}</option>
               ))}
@@ -98,7 +99,7 @@ export default function MarketingPage() {
               onChange={(e) => setSelectedIndustry(e.target.value)}
               className="px-3 py-2 text-sm border border-neutral-200 rounded-lg bg-white"
             >
-              <option value="">Select Industry</option>
+              <option value="">{t("Select Industry", "\u9009\u62e9\u884c\u4e1a")}</option>
               {industries.map((ind) => (
                 <option key={ind} value={ind}>{ind}</option>
               ))}
@@ -128,7 +129,7 @@ export default function MarketingPage() {
               className="flex items-center justify-center gap-2 px-4 py-2 bg-brand-500 text-white text-sm rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              Analyze
+              {t("Analyze", "\u5206\u6790")}
             </button>
           </div>
         </div>
@@ -265,11 +266,11 @@ export default function MarketingPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[
-                    { key: "content_strategy", icon: Tag, label: "Content Strategy" },
-                    { key: "channel_strategy", icon: BarChart3, label: "Channel Strategy" },
-                    { key: "timing_strategy", icon: Clock, label: "Timing Strategy" },
-                    { key: "geo_strategy", icon: Globe, label: "Geo Strategy" },
-                    { key: "keyword_strategy", icon: Target, label: "Keyword Strategy" },
+                    { key: "content_strategy", icon: Tag, label: t("Content Strategy", "\u5185\u5bb9\u7b56\u7565") },
+                    { key: "channel_strategy", icon: BarChart3, label: t("Channel Strategy", "\u6e20\u9053\u7b56\u7565") },
+                    { key: "timing_strategy", icon: Clock, label: t("Timing Strategy", "\u65f6\u673a\u7b56\u7565") },
+                    { key: "geo_strategy", icon: Globe, label: t("Geo Strategy", "\u5730\u57df\u7b56\u7565") },
+                    { key: "keyword_strategy", icon: Target, label: t("Keyword Strategy", "\u5173\u952e\u8bcd\u7b56\u7565") },
                   ].map(({ key, icon: Icon, label }) => {
                     const section = strategy[key] as Record<string, unknown> | undefined;
                     if (!section) return null;
@@ -283,7 +284,7 @@ export default function MarketingPage() {
                           if (!items || !Array.isArray(items)) return null;
                           return (
                             <div className="mb-2">
-                              <p className="text-[10px] text-green-600 font-medium mb-1">RECOMMENDED</p>
+                              <p className="text-[10px] text-green-600 font-medium mb-1">{t("RECOMMENDED", "\u63a8\u8350")}</p>
                               <div className="flex flex-wrap gap-1">
                                 {items.map((item, i) => (
                                   <span key={i} className="text-xs px-2 py-0.5 rounded bg-green-50 text-green-700">
@@ -299,7 +300,7 @@ export default function MarketingPage() {
                           if (!items || !Array.isArray(items)) return null;
                           return (
                             <div className="mb-2">
-                              <p className="text-[10px] text-red-600 font-medium mb-1">AVOID</p>
+                              <p className="text-[10px] text-red-600 font-medium mb-1">{t("AVOID", "\u907f\u514d")}</p>
                               <div className="flex flex-wrap gap-1">
                                 {items.map((item, i) => (
                                   <span key={i} className="text-xs px-2 py-0.5 rounded bg-red-50 text-red-700">
@@ -315,7 +316,7 @@ export default function MarketingPage() {
                           if (!items || !Array.isArray(items)) return null;
                           return (
                             <div className="mb-2">
-                              <p className="text-[10px] text-blue-600 font-medium mb-1">LONG TAIL</p>
+                              <p className="text-[10px] text-blue-600 font-medium mb-1">{t("LONG TAIL", "\u957f\u5c3e\u8bcd")}</p>
                               <div className="flex flex-wrap gap-1">
                                 {items.map((item, i) => (
                                   <span key={i} className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">

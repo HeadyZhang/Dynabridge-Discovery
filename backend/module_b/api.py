@@ -630,6 +630,7 @@ def get_market_intelligence(
     industry: Optional[str] = Query(None),
     market: str = Query("US"),
     keywords: str = Query(""),
+    lang: str = Query("cn"),
 ):
     """GEO trends + consumer insights → marketing intelligence."""
     keyword_list = [k.strip() for k in keywords.split(",") if k.strip()] or [industry or brand or "brand"]
@@ -662,27 +663,32 @@ def get_market_intelligence(
     try:
         import anthropic
         client = anthropic.Anthropic()
+
+        lang_note = "Output all text values in English." if lang == "en" else "所有文本用中文输出。"
+
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=2000,
-            messages=[{"role": "user", "content": f"""你是品牌营销策略专家。基于以下数据为品牌制定营销策略。
+            messages=[{"role": "user", "content": f"""You are a brand marketing strategist. Based on the following data, create a marketing strategy.
 
-品牌: {brand or 'Unknown'}
-行业: {industry or 'Unknown'}
-目标市场: {market}
-搜索关键词: {keywords}
+Brand: {brand or 'Unknown'}
+Industry: {industry or 'Unknown'}
+Target market: {market}
+Keywords: {keywords}
 
-Google Trends 数据:
-- 平均搜索热度: {trends.get('interest_over_time', {}).get('averages', {})}
-- 相关搜索: {trends.get('related_queries', {}).get('top', [])[:5]}
-- 热门地区: {trends.get('regional_interest', [])[:5]}
+Google Trends data:
+- Average search interest: {trends.get('interest_over_time', {}).get('averages', {})}
+- Related searches: {trends.get('related_queries', {}).get('top', [])[:5]}
+- Top regions: {trends.get('regional_interest', [])[:5]}
 
-消费者洞察 ({len(insights_data)} 条):
+Consumer insights ({len(insights_data)} total):
 {chr(10).join([f"[{i['brand']}] {i['text']}" for i in insights_data[:10]])}
 
-请输出 JSON 格式的营销策略建议:
+{lang_note}
+
+Output JSON format:
 {{
-  "executive_summary": "一段话总结",
+  "executive_summary": "one paragraph summary",
   "content_strategy": {{"recommended": ["...", "..."], "avoid": ["..."], "rationale": "..."}},
   "channel_strategy": {{"primary": ["..."], "secondary": ["..."], "rationale": "..."}},
   "timing_strategy": {{"peak_months": ["..."], "rationale": "..."}},
@@ -690,7 +696,7 @@ Google Trends 数据:
   "keyword_strategy": {{"primary": ["..."], "long_tail": ["..."], "rationale": "..."}}
 }}
 
-只输出 JSON。"""}],
+Output JSON only."""}],
         )
         text = response.content[0].text.strip()
         if text.startswith("```"):

@@ -271,12 +271,14 @@ export async function getMarketIntelligence(params: {
   industry?: string;
   market?: string;
   keywords?: string;
+  lang?: string;
 }): Promise<MarketIntelligence> {
   const sp = new URLSearchParams();
   if (params.brand) sp.set("brand", params.brand);
   if (params.industry) sp.set("industry", params.industry);
   if (params.market) sp.set("market", params.market);
   if (params.keywords) sp.set("keywords", params.keywords);
+  if (params.lang) sp.set("lang", params.lang);
   const res = await fetch(`${API_BASE}/api/knowledge/market-intelligence?${sp.toString()}`);
   return res.json();
 }
