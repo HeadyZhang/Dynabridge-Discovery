@@ -634,7 +634,14 @@ def get_market_intelligence(
     lang: str = Query("cn"),
 ):
     """GEO trends + consumer insights → marketing intelligence."""
-    keyword_list = [k.strip() for k in keywords.split(",") if k.strip()] or [industry or brand or "brand"]
+    keyword_list = [k.strip() for k in keywords.split(",") if k.strip()]
+    if not keyword_list:
+        if brand and brand != "all":
+            keyword_list.append(brand)
+        if industry and industry != "all":
+            keyword_list.append(industry)
+        if not keyword_list:
+            keyword_list = ["brand"]
 
     # 1. Google Trends
     trends: dict = {}

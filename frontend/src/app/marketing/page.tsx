@@ -119,7 +119,10 @@ export default function MarketingPage() {
               type="text"
               value={keywords}
               onChange={(e) => setKeywords(e.target.value)}
-              placeholder="Keywords (comma separated)"
+              placeholder={t(
+                "Keywords (auto-generated from brand + industry if empty)",
+                "\u5173\u952e\u8bcd\uff08\u7559\u7a7a\u5c06\u81ea\u52a8\u4f7f\u7528\u54c1\u724c\u540d+\u884c\u4e1a\uff09"
+              )}
               className="px-3 py-2 text-sm border border-neutral-200 rounded-lg"
             />
 
