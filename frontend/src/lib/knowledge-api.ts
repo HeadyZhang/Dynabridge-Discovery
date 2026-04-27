@@ -202,11 +202,13 @@ export async function getSynthesis(params?: {
   industry?: string;
   insight_type?: string;
   geo?: string;
+  lang?: string;
 }): Promise<SynthesisResponse> {
   const sp = new URLSearchParams();
   if (params?.industry) sp.set("industry", params.industry);
   if (params?.insight_type) sp.set("insight_type", params.insight_type);
   if (params?.geo) sp.set("geo", params.geo);
+  if (params?.lang) sp.set("lang", params.lang);
   const qs = sp.toString();
   const res = await fetch(`${API_BASE}/api/knowledge/insights/synthesis${qs ? `?${qs}` : ""}`);
   return res.json();

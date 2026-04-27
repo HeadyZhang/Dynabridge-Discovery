@@ -407,6 +407,7 @@ def synthesize_insights(
     industry: Optional[str] = Query(None),
     insight_type: Optional[str] = Query(None),
     geo: Optional[str] = Query(None),
+    lang: str = Query("cn"),
 ):
     """AI cross-case insight synthesis."""
     db = _get_db()
@@ -432,12 +433,20 @@ def synthesize_insights(
     try:
         import anthropic
         client = anthropic.Anthropic()
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1000,
-            messages=[{
-                "role": "user",
-                "content": f"""分析以下来自不同品牌项目的消费者洞察，生成一份跨案例综合分析。
+
+        if lang == "en":
+            prompt_text = f"""Analyze the following consumer insights from different brand projects and generate a cross-case synthesis.
+
+{insights_text}
+
+Requirements:
+1. Identify common findings across brands (3-5 points)
+2. Highlight key differences between industries
+3. Provide recommendations for new projects
+
+Output in English only. No JSON needed."""
+        else:
+            prompt_text = f"""分析以下来自不同品牌项目的消费者洞察，生成一份跨案例综合分析。
 
 {insights_text}
 
@@ -445,10 +454,13 @@ def synthesize_insights(
 1. 识别跨品牌的共性发现（3-5 条）
 2. 标出行业间的关键差异
 3. 给出对新项目的建议
-4. 用中英双语输出
 
-只输出分析文字，不需要 JSON。"""
-            }],
+用中文输出，不需要 JSON。"""
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1000,
+            messages=[{"role": "user", "content": prompt_text}],
         )
         synthesis = response.content[0].text
     except Exception:

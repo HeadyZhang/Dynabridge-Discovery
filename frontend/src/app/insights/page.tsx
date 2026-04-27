@@ -31,7 +31,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export default function InsightsPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [insights, setInsights] = useState<ConsumerInsightData[]>([]);
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
@@ -78,6 +78,7 @@ export default function InsightsPage() {
         industry: filterIndustry || undefined,
         insight_type: filterType || undefined,
         geo: filterGeo || undefined,
+        lang: lang === "en" ? "en" : "cn",
       });
       setSynthesis(data.synthesis);
     } catch {
