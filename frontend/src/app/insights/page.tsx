@@ -42,6 +42,7 @@ export default function InsightsPage() {
   const [filterIndustry, setFilterIndustry] = useState("");
   const [filterType, setFilterType] = useState("");
   const [filterGeo, setFilterGeo] = useState("");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
     getStats().then(setStats).catch(() => {});
@@ -225,7 +226,8 @@ export default function InsightsPage() {
                 {insights.map((insight) => (
                   <div
                     key={insight.id}
-                    className="bg-white rounded-xl border border-neutral-200 p-4 hover:shadow-sm transition-shadow"
+                    className="bg-white rounded-xl border border-neutral-200 p-4 hover:shadow-sm transition-shadow cursor-pointer"
+                    onClick={() => setExpandedId(expandedId === insight.id ? null : insight.id)}
                   >
                     <p className="text-sm text-neutral-800 leading-relaxed mb-3">
                       {insight.text}
@@ -233,6 +235,7 @@ export default function InsightsPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <Link
                         href={`/knowledge/${insight.case_id}`}
+                        onClick={(e) => e.stopPropagation()}
                         className="text-xs px-2 py-0.5 rounded bg-neutral-100 text-brand-600 hover:bg-brand-50 transition-colors"
                       >
                         {insight.brand_name}
@@ -252,6 +255,24 @@ export default function InsightsPage() {
                         {insight.confidence} confidence
                       </span>
                     </div>
+
+                    {expandedId === insight.id && (
+                      <div className="mt-3 p-3 bg-gray-50 rounded text-sm border-t border-neutral-100">
+                        <p><strong>{t("Source", "\u6765\u6e90")}:</strong>{" "}
+                          <Link
+                            href={`/knowledge/${insight.case_id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-brand-600 hover:underline"
+                          >
+                            {insight.brand_name}
+                          </Link>
+                        </p>
+                        <p><strong>{t("Evidence", "\u8bc1\u636e\u7c7b\u578b")}:</strong> {insight.source}</p>
+                        <p><strong>{t("Confidence", "\u7f6e\u4fe1\u5ea6")}:</strong> {insight.confidence}</p>
+                        {insight.geo && <p><strong>{t("Market", "\u5e02\u573a")}:</strong> {insight.geo.toUpperCase()}</p>}
+                        {insight.segment && <p><strong>{t("Segment", "\u4eba\u7fa4")}:</strong> {insight.segment}</p>}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {insights.length === 0 && (
