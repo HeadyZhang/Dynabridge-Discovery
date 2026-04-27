@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, FileText, ExternalLink, ChevronDown, ChevronUp,
   CheckCircle2, XCircle, Database, Loader2, Sparkles,
@@ -24,7 +24,10 @@ const PHASE_STYLES: Record<string, string> = {
 
 export default function CaseDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const caseId = Number(params.id);
+  const highlightQuery = searchParams.get("highlight");
+  const targetFileId = searchParams.get("file");
 
   const [caseData, setCaseData] = useState<CaseDetail | null>(null);
   const [similar, setSimilar] = useState<SimilarCase[]>([]);
@@ -35,6 +38,18 @@ export default function CaseDetailPage() {
     if (!caseId) return;
     loadCase();
   }, [caseId]);
+
+  useEffect(() => {
+    if (targetFileId && caseData) {
+      setTimeout(() => {
+        const el = document.getElementById(`file-${targetFileId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.classList.add("bg-yellow-50");
+        }
+      }, 300);
+    }
+  }, [targetFileId, caseData]);
 
   const loadCase = async () => {
     try {
@@ -248,7 +263,7 @@ export default function CaseDetailPage() {
                       </thead>
                       <tbody>
                         {files.map((f) => (
-                          <tr key={f.id} className="border-t border-neutral-50 hover:bg-neutral-50">
+                          <tr key={f.id} id={`file-${f.drive_file_id}`} className="border-t border-neutral-50 hover:bg-neutral-50">
                             <td className="py-2 text-neutral-700 truncate max-w-[300px]">{f.filename}</td>
                             <td className="py-2">
                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500">

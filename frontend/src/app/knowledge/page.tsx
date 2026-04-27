@@ -179,7 +179,7 @@ export default function KnowledgePage() {
               {searchResults.map((r, i) => (
                 <Link
                   key={i}
-                  href={r.case_id ? `/knowledge/${r.case_id}` : "#"}
+                  href={r.case_id ? `/knowledge/${r.case_id}?highlight=${encodeURIComponent(searchQuery)}${r.file_id ? `&file=${r.file_id}` : ""}` : "#"}
                   className="flex items-start gap-3 p-3 rounded-lg hover:bg-brand-50 cursor-pointer transition-colors border border-transparent hover:border-brand-200"
                 >
                   <FileText className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />

@@ -43,6 +43,7 @@ export interface SearchResult {
   source: string;
   doc_id: string;
   case_id: number | null;
+  file_id: string | null;
   brand_name: string;
   filename: string;
   snippet: string;

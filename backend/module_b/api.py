@@ -115,6 +115,12 @@ def search_cases(
             return int(parts[1])
         return None
 
+    def _extract_file_id(doc_id: str) -> str | None:
+        """Extract file_id from doc_id like 'case_5_file_ABC123'."""
+        if "_file_" in doc_id:
+            return doc_id.split("_file_", 1)[1]
+        return None
+
     if mode in ("fts", "hybrid"):
         fts = FullTextIndex()
         fts_results = fts.search(q, limit=limit)
@@ -123,6 +129,7 @@ def search_cases(
                 "source": "fts",
                 "doc_id": r["doc_id"],
                 "case_id": _extract_case_id(r["doc_id"]),
+                "file_id": _extract_file_id(r["doc_id"]),
                 "brand_name": r["brand_name"],
                 "filename": r["filename"],
                 "snippet": r["snippet"],
@@ -139,6 +146,7 @@ def search_cases(
                     "source": "vector",
                     "doc_id": r["doc_id"],
                     "case_id": _extract_case_id(r["doc_id"]),
+                    "file_id": _extract_file_id(r["doc_id"]),
                     "brand_name": r["brand_name"],
                     "filename": r["filename"],
                     "snippet": "",
