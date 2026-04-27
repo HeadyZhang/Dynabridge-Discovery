@@ -15,6 +15,45 @@ FTS_DB_PATH = BASE_DIR / "case_search.db"
 VECTOR_DB_PATH = BASE_DIR / "case_vectors.npz"
 VECTOR_META_PATH = BASE_DIR / "case_vectors_meta.json"
 
+
+def _expand_search_query(q: str) -> str:
+    """Expand search query for better recall.
+
+    Chinese: progressively shorten terms ("价格战" → "价格" OR "价格战")
+    English: add wildcard suffix for prefix matching ("price" → "price*")
+    """
+    q = q.strip()
+    if not q:
+        return q
+
+    terms = [q]
+
+    has_chinese = any("\u4e00" <= c <= "\u9fff" for c in q)
+
+    if has_chinese:
+        # Progressively shorten Chinese characters
+        for i in range(len(q) - 1, 1, -1):
+            sub = q[:i]
+            if any("\u4e00" <= c <= "\u9fff" for c in sub):
+                terms.append(sub)
+    else:
+        # English: add wildcard for prefix matching
+        terms.append(f"{q}*")
+
+    # Build FTS5 OR query with quoted terms (except wildcards)
+    parts = []
+    seen = set()
+    for t in terms:
+        if t in seen:
+            continue
+        seen.add(t)
+        if t.endswith("*"):
+            parts.append(t)
+        else:
+            parts.append(f'"{t}"')
+
+    return " OR ".join(parts)
+
 # Lazy-loaded embedding model
 _model = None
 
@@ -61,6 +100,7 @@ class FullTextIndex:
         Returns:
             [{"doc_id", "brand_name", "filename", "snippet", "rank"}]
         """
+        expanded = _expand_search_query(query)
         conn = sqlite3.connect(self._db_path)
         try:
             rows = conn.execute("""
@@ -71,7 +111,7 @@ class FullTextIndex:
                 WHERE case_fts MATCH ?
                 ORDER BY rank
                 LIMIT ?
-            """, (query, limit)).fetchall()
+            """, (expanded, limit)).fetchall()
         except sqlite3.OperationalError:
             rows = []
         conn.close()
