@@ -36,10 +36,21 @@ import {
   getComments,
   downloadUrl,
   deleteProject,
+  designSurvey,
+  surveyDownloadUrl,
+  uploadSurveyResponses,
+  listPdfs,
+  pdfDownloadUrl,
+  analysisDownloadUrl,
   type Project,
   type SlidePreview,
   type Comment,
   type ProgressEvent,
+  type SurveyMode,
+  type PdfReport,
+  type FeedbackType,
+  approvePhase,
+  regeneratePhase,
 } from "@/lib/api";
 
 type Step = "scraping" | "ecommerce" | "parsing" | "reviews" | "competitors" | "analyzing" | "generating";
@@ -98,6 +109,11 @@ export default function Home() {
   const [competitorInput, setCompetitorInput] = useState("");
   const [language, setLanguage] = useState("en");
   const [phase, setPhase] = useState<Phase>("brand_reality");
+  const [checkpointMode, setCheckpointMode] = useState(false);
+  const [checkpointPhase, setCheckpointPhase] = useState<string | null>(null); // current checkpoint phase key (phase1/phase2/phase3)
+  const [checkpointNextPhase, setCheckpointNextPhase] = useState<string | null>(null);
+  const [feedbackType, setFeedbackType] = useState<FeedbackType>("insight");
+  const [surveyMode, setSurveyMode] = useState<"simulated" | "real">("simulated");
   const [files, setFiles] = useState<File[]>([]);
 
   // Pipeline state
@@ -114,6 +130,9 @@ export default function Home() {
   const [discoveredCompetitors, setDiscoveredCompetitors] = useState<
     { name: string; source: string; confidence: number; category_role?: string; reason?: string }[]
   >([]);
+
+  // PDF reports state
+  const [pdfReports, setPdfReports] = useState<PdfReport[]>([]);
 
   // Review state
   const [comments, setComments] = useState<Comment[]>([]);
@@ -154,6 +173,7 @@ export default function Home() {
     setCompetitors(project.competitor_urls || []);
     setLanguage(project.language);
     setPhase((project.phase || "brand_reality") as Phase);
+    setSurveyMode((project.survey_mode || "simulated") as SurveyMode);
     setFiles([]);
     setDiscoveredCompetitors([]);
     setCompletedSteps(new Set());
@@ -167,6 +187,14 @@ export default function Home() {
       setCurrentSlide(0);
     } catch {
       setSlides([]);
+    }
+
+    // Load PDF reports
+    try {
+      const pdfs = await listPdfs(project.id);
+      setPdfReports(pdfs);
+    } catch {
+      setPdfReports([]);
     }
 
     // Load comments
@@ -187,6 +215,7 @@ export default function Home() {
     setCompetitorInput("");
     setLanguage("en");
     setPhase("brand_reality");
+    setSurveyMode("simulated");
     setFiles([]);
     setSlides([]);
     setComments([]);
@@ -253,6 +282,7 @@ export default function Home() {
           competitor_urls: competitors,
           language,
           phase,
+          survey_mode: surveyMode,
         });
         pid = project.id;
         setProjectId(pid);
@@ -266,6 +296,10 @@ export default function Home() {
 
       // Generate report with SSE progress
       setDiscoveredCompetitors([]);
+
+      // In checkpoint mode with Full Discovery, start with brand_reality phase
+      const genPhase = checkpointMode && phase === "full" ? "brand_reality" : phase;
+
       generateReport(
         pid,
         (event: ProgressEvent & { competitors?: typeof discoveredCompetitors }) => {
@@ -293,11 +327,16 @@ export default function Home() {
         async () => {
           setIsGenerating(false);
           setCurrentStep(null);
-          showToast("Report generated successfully!", "success");
+          showToast(locale === "zh" ? "报告生成完成！" : "Report generated successfully!", "success");
           // Load slide previews
           const slideData = await getSlides(pid!);
           setSlides(slideData);
           setCurrentSlide(0);
+          // Load PDF reports
+          try {
+            const pdfs = await listPdfs(pid!);
+            setPdfReports(pdfs);
+          } catch { setPdfReports([]); }
           // Load comments
           const commentData = await getComments(pid!);
           setComments(commentData);
@@ -309,7 +348,28 @@ export default function Home() {
           showToast(msg || "Generation failed");
           loadProjects();
         },
-        phase
+        genPhase,
+        checkpointMode,
+        // onCheckpoint handler
+        async (data) => {
+          setIsGenerating(false);
+          setCurrentStep(null);
+          setCheckpointPhase(data.phase);
+          setCheckpointNextPhase(data.next_phase);
+          showToast(
+            locale === "zh"
+              ? `${data.phase} 阶段完成，请审阅 slides 并提交反馈`
+              : `${data.phase} ready for review. Add feedback or approve to continue.`,
+            "success"
+          );
+          // Load slides for review
+          const slideData = await getSlides(pid!);
+          setSlides(slideData);
+          setCurrentSlide(0);
+          const commentData = await getComments(pid!);
+          setComments(commentData);
+          loadProjects();
+        },
       );
     } catch (err) {
       setIsGenerating(false);
@@ -666,6 +726,112 @@ export default function Home() {
               </p>
             </div>
 
+            {/* Checkpoint Mode Toggle */}
+            <div
+              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-neutral-50 cursor-pointer hover:bg-neutral-100 transition-colors"
+              onClick={() => setCheckpointMode(!checkpointMode)}
+            >
+              <div>
+                <span className="text-sm font-medium text-neutral-700">
+                  {locale === "zh" ? "分阶段审阅" : "Checkpoint Review"}
+                </span>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  {locale === "zh"
+                    ? "每个阶段生成后暂停，等待审阅和反馈"
+                    : "Pause after each phase for review & feedback"}
+                </p>
+              </div>
+              <div
+                className={`w-10 h-6 rounded-full relative transition-colors ${
+                  checkpointMode ? "bg-brand-500" : "bg-neutral-300"
+                }`}
+              >
+                <div
+                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                    checkpointMode ? "translate-x-[18px]" : "translate-x-0.5"
+                  }`}
+                />
+              </div>
+            </div>
+
+            {/* Survey Mode — only show for full phase */}
+            {phase === "full" && (
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1.5">
+                  {locale === "zh" ? "消费者问卷模式" : "Consumer Survey Mode"}
+                </label>
+                <div className="flex gap-2">
+                  {([
+                    { value: "simulated" as const, label: locale === "zh" ? "AI 模拟" : "AI Simulated" },
+                    { value: "real" as const, label: locale === "zh" ? "真实问卷" : "Real Survey" },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setSurveyMode(opt.value)}
+                      className={`flex-1 py-2 text-sm rounded-xl transition-all ${
+                        surveyMode === opt.value
+                          ? "bg-brand-500 text-white shadow-sm"
+                          : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-xs text-neutral-400">
+                  {surveyMode === "simulated"
+                    ? locale === "zh" ? "AI 根据品类和品牌数据自动生成模拟问卷结果（n=200）" : "AI generates simulated survey responses based on brand/category data (n=200)"
+                    : locale === "zh" ? "系统设计问卷 → 您手动分发收集 → 上传结果 → 生成报告" : "System designs questionnaire → You distribute & collect → Upload responses → Generate report"}
+                </p>
+
+                {/* Real survey workflow buttons */}
+                {surveyMode === "real" && projectId && (
+                  <div className="mt-3 space-y-2">
+                    {/* Step 1: Design & Download Questionnaire */}
+                    <button
+                      onClick={async () => {
+                        try {
+                          await designSurvey(projectId);
+                          window.open(surveyDownloadUrl(projectId), "_blank");
+                        } catch (err) {
+                          alert(locale === "zh" ? "问卷生成失败" : "Failed to generate questionnaire");
+                        }
+                      }}
+                      className="w-full py-2 text-sm bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4" />
+                      {locale === "zh" ? "生成并下载问卷" : "Generate & Download Questionnaire"}
+                    </button>
+
+                    {/* Step 2: Upload Responses */}
+                    <label className="w-full py-2 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                      <Upload className="w-4 h-4" />
+                      {locale === "zh" ? "上传问卷结果 (JSON/CSV)" : "Upload Survey Responses (JSON/CSV)"}
+                      <input
+                        type="file"
+                        accept=".json,.csv"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file || !projectId) return;
+                          try {
+                            const result = await uploadSurveyResponses(projectId, file);
+                            alert(
+                              locale === "zh"
+                                ? `上传成功：${result.sample_size} 份回复，${result.question_count} 个问题`
+                                : `Uploaded: ${result.sample_size} responses, ${result.question_count} questions`
+                            );
+                          } catch (err) {
+                            alert(locale === "zh" ? "上传失败" : "Upload failed");
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Divider */}
             <div className="border-t border-neutral-100" />
 
@@ -717,6 +883,129 @@ export default function Home() {
               )}
             </button>
 
+            {/* Checkpoint Review Panel */}
+            {checkpointPhase && projectId && !isGenerating && (
+              <div className="p-3 rounded-xl border-2 border-brand-200 bg-brand-50/50 space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+                  <span className="text-sm font-medium text-brand-700">
+                    {locale === "zh" ? "审阅中" : "Review"}: {checkpointPhase}
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-500">
+                  {locale === "zh"
+                    ? "点击 slide 添加反馈，完成后选择继续或修改"
+                    : "Click slides to add feedback, then approve or revise"}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      if (!checkpointPhase || !projectId) return;
+                      if (checkpointNextPhase) {
+                        // Approve and generate next phase
+                        setIsGenerating(true);
+                        setCheckpointPhase(null);
+                        try {
+                          const result = await approvePhase(projectId, checkpointPhase);
+                          showToast(
+                            locale === "zh"
+                              ? `${checkpointPhase} 已通过 (${result.resolved_comments} 条反馈已解决)`
+                              : `${checkpointPhase} approved (${result.resolved_comments} comments resolved)`,
+                            "success"
+                          );
+                          // Trigger next phase generation
+                          const nextGenPhase = { phase1: "brand_reality", phase2: "market_structure", phase3: "full" }[result.next_phase!] || "full";
+                          generateReport(
+                            projectId,
+                            (event: ProgressEvent) => {
+                              setCurrentStep(event.step as Step);
+                              if (event.done) setCompletedSteps((prev) => new Set([...prev, event.step as Step]));
+                            },
+                            async () => {
+                              setIsGenerating(false);
+                              setCurrentStep(null);
+                              showToast(locale === "zh" ? "报告生成完成！" : "Report complete!", "success");
+                              const slideData = await getSlides(projectId);
+                              setSlides(slideData);
+                              setCurrentSlide(0);
+                              try { setPdfReports(await listPdfs(projectId)); } catch { setPdfReports([]); }
+                              setComments(await getComments(projectId));
+                              setCheckpointPhase(null);
+                              loadProjects();
+                            },
+                            (msg) => { setIsGenerating(false); showToast(msg || "Generation failed"); },
+                            nextGenPhase,
+                            true,
+                            async (cpData) => {
+                              setIsGenerating(false);
+                              setCurrentStep(null);
+                              setCheckpointPhase(cpData.phase);
+                              setCheckpointNextPhase(cpData.next_phase);
+                              const slideData = await getSlides(projectId);
+                              setSlides(slideData);
+                              setCurrentSlide(0);
+                              setComments(await getComments(projectId));
+                              showToast(locale === "zh" ? `${cpData.phase} 已生成，请审阅` : `${cpData.phase} ready for review`, "success");
+                            },
+                          );
+                        } catch (err) {
+                          setIsGenerating(false);
+                          showToast("Approve failed");
+                        }
+                      } else {
+                        // Final phase — just approve
+                        try {
+                          await approvePhase(projectId, checkpointPhase);
+                          setCheckpointPhase(null);
+                          setCheckpointNextPhase(null);
+                          showToast(locale === "zh" ? "全部阶段已通过！" : "All phases approved!", "success");
+                          loadProjects();
+                        } catch { showToast("Approve failed"); }
+                      }
+                    }}
+                    className="flex-1 py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors"
+                  >
+                    {checkpointNextPhase
+                      ? (locale === "zh" ? "✓ 通过，继续下一阶段" : "✓ Approve & Continue")
+                      : (locale === "zh" ? "✓ 全部通过" : "✓ Approve All")}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!checkpointPhase || !projectId) return;
+                      setIsGenerating(true);
+                      regeneratePhase(
+                        projectId,
+                        checkpointPhase,
+                        (event) => {
+                          setCurrentStep(event.step as Step);
+                          if (event.done) setCompletedSteps((prev) => new Set([...prev, event.step as Step]));
+                        },
+                        async (data) => {
+                          setIsGenerating(false);
+                          setCurrentStep(null);
+                          showToast(
+                            locale === "zh"
+                              ? `已根据 ${data.feedback_resolved} 条反馈重新生成`
+                              : `Rebuilt with ${data.feedback_resolved} feedback items`,
+                            "success"
+                          );
+                          const slideData = await getSlides(projectId);
+                          setSlides(slideData);
+                          setCurrentSlide(0);
+                          setComments(await getComments(projectId));
+                        },
+                        (msg) => { setIsGenerating(false); showToast(msg || "Regeneration failed"); },
+                      );
+                    }}
+                    disabled={comments.filter((c) => !c.resolved).length === 0}
+                    className="flex-1 py-2 text-sm font-medium rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {locale === "zh" ? "↻ 根据反馈修改" : "↻ Revise"}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Download + Regenerate */}
             {projectId && slides.length > 0 && (
               <div className="flex gap-2">
@@ -734,6 +1023,39 @@ export default function Home() {
                 >
                   <RefreshCw className="w-4 h-4" />
                 </button>
+              </div>
+            )}
+
+            {/* PDF Reports Download */}
+            {projectId && pdfReports.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
+                  {locale === "zh" ? "PDF 报告" : "PDF Reports"}
+                </p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {pdfReports.map((pdf) => (
+                    <a
+                      key={pdf.phase}
+                      href={pdfDownloadUrl(projectId, pdf.phase)}
+                      className="py-2 px-3 flex items-center gap-1.5 border border-neutral-200 text-neutral-600 rounded-lg hover:bg-neutral-50 transition-all text-xs"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-brand-500 shrink-0" />
+                      <span className="truncate">
+                        {pdf.phase === "phase1" ? (locale === "zh" ? "品牌现实" : "Brand Reality")
+                          : pdf.phase === "phase2" ? (locale === "zh" ? "市场结构" : "Market Structure")
+                          : pdf.phase === "phase3" ? (locale === "zh" ? "消费者洞察" : "Consumer")
+                          : locale === "zh" ? "目标选择" : "Target"}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+                <a
+                  href={analysisDownloadUrl(projectId)}
+                  className="w-full py-2 flex items-center justify-center gap-1.5 border border-neutral-200 text-neutral-500 rounded-lg hover:bg-neutral-50 transition-all text-xs"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {locale === "zh" ? "导出分析 JSON" : "Export Analysis JSON"}
+                </a>
               </div>
             )}
           </div>

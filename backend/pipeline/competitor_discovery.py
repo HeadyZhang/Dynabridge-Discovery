@@ -32,7 +32,7 @@ async def discover_competitors(
     try:
         from pipeline.managed_agent import discover_competitors_managed
 
-        category_context = _infer_category(ecommerce_data)
+        category_context = _infer_category(ecommerce_data, brand_name)
         managed_results = await discover_competitors_managed(
             brand_name=brand_name,
             brand_url=brand_url,
@@ -82,7 +82,7 @@ async def _discover_from_amazon(
         return competitors
 
     # Infer search query from brand name + common category keywords
-    category_keywords = _infer_category(ecommerce_data)
+    category_keywords = _infer_category(ecommerce_data, brand_name)
     search_query = f"{category_keywords}" if category_keywords else brand_name
 
     try:
@@ -206,8 +206,8 @@ async def _discover_from_amazon(
                     "mention_count": count,
                 })
 
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[competitor_discovery] Extraction from scrape data failed: {e}")
 
     return competitors
 
@@ -215,8 +215,13 @@ async def _discover_from_amazon(
 async def _discover_from_ai(
     brand_name: str, brand_url: str, scrape_data: dict = None
 ) -> list[dict]:
-    """Ask Claude to identify competitors based on brand context."""
-    from config import ANTHROPIC_API_KEY
+    """Discover competitors using Claude + web_search tool.
+
+    Uses real-time web search to find competitors dynamically for ANY brand
+    in ANY category, rather than relying on a static brand list.
+    Falls back to non-search Claude inference if web_search fails.
+    """
+    from config import ANTHROPIC_API_KEY, MODEL_OPUS
 
     if not ANTHROPIC_API_KEY:
         return _fallback_ai_competitors(brand_name, scrape_data)
@@ -232,23 +237,105 @@ async def _discover_from_ai(
             for page in scrape_data["pages"][:3]:
                 context += f"\n{page.get('title', '')}: {page.get('text', '')[:500]}\n"
 
-        prompt = f"""Based on this brand, identify 6-8 direct competitors.
+        prompt = f"""Research and identify 8-10 competitors for this brand using web search.
 
 Brand: {brand_name}
-Website: {brand_url}
-{f"Website content: {context}" if context else ""}
+Website: {brand_url or "Unknown"}
+{f"Website content excerpt:{context}" if context else ""}
 
-Return ONLY a JSON array of competitor objects. Each object must have:
+## Search Strategy
+1. Search "{brand_name} competitors" and "{brand_name} alternatives"
+2. Search the product category + "best brands" or "top brands"
+3. Search "{brand_name} vs" to find head-to-head comparisons
+4. Check Amazon and review sites for brands in the same category
+
+## Output
+Return a JSON array of 8-10 competitor objects. Each object must have:
 - "name": competitor brand name (official capitalization)
 - "category_role": one of "direct" | "aspirational" | "adjacent"
-- "reason": one sentence explaining why they're a competitor
+  - direct = same category, same price tier, competing for same customers
+  - aspirational = where the brand wants to be (higher-end, more established)
+  - adjacent = different approach to same customer need
+- "reason": one sentence explaining competitive relationship with evidence from your search
+- "url": brand website URL if found
 
-Example: [{{"name": "Hydro Flask", "category_role": "direct", "reason": "Leading insulated water bottle brand competing in the same category"}}]
-
+Sort by relevance: direct competitors first, then aspirational, then adjacent.
 Return ONLY the JSON array, no other text."""
 
+        print(f"[competitor_discovery] AI discovery with web_search for '{brand_name}'...")
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=MODEL_OPUS,
+            max_tokens=2000,
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 10}],
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        # Extract text from response (may have tool_use blocks interspersed)
+        text_parts = []
+        search_count = 0
+        for block in response.content:
+            if hasattr(block, "text"):
+                text_parts.append(block.text)
+            if hasattr(block, "type") and block.type == "tool_use":
+                search_count += 1
+        text = "".join(text_parts)
+        print(f"[competitor_discovery] AI used {search_count} web searches")
+
+        start = text.find("[")
+        end = text.rfind("]") + 1
+        if start >= 0 and end > start:
+            items = json.loads(text[start:end])
+            results = [
+                {
+                    "name": item["name"],
+                    "source": "ai_websearch",
+                    "confidence": 0.95 if item.get("category_role") == "direct" else 0.8,
+                    "url": item.get("url"),
+                    "category_role": item.get("category_role", "direct"),
+                    "reason": item.get("reason", ""),
+                }
+                for item in items
+                if item.get("name")
+            ]
+            if results:
+                print(f"[competitor_discovery] Found {len(results)} competitors via web search")
+                return results
+
+    except Exception as e:
+        print(f"[competitor_discovery] AI web_search failed ({e}), trying without search...")
+
+    # Fallback: Claude without web_search (uses its training knowledge)
+    return _discover_from_ai_nosearch(brand_name, brand_url, scrape_data)
+
+
+async def _discover_from_ai_nosearch(
+    brand_name: str, brand_url: str, scrape_data: dict = None
+) -> list[dict]:
+    """Fallback: ask Claude to identify competitors from training knowledge (no web search)."""
+    from config import ANTHROPIC_API_KEY, MODEL_OPUS
+
+    if not ANTHROPIC_API_KEY:
+        return _fallback_ai_competitors(brand_name, scrape_data)
+
+    try:
+        from anthropic import Anthropic
+        client = Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        context = ""
+        if scrape_data and scrape_data.get("pages"):
+            for page in scrape_data["pages"][:3]:
+                context += f"\n{page.get('title', '')}: {page.get('text', '')[:500]}\n"
+
+        prompt = f"""Identify 6-8 competitors for this brand based on your knowledge.
+
+Brand: {brand_name}
+Website: {brand_url or "Unknown"}
+{f"Website content:{context}" if context else ""}
+
+Return ONLY a JSON array. Each object: {{"name": "Brand", "category_role": "direct|aspirational|adjacent", "reason": "why"}}"""
+
+        response = client.messages.create(
+            model=MODEL_OPUS,
             max_tokens=1000,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -268,9 +355,10 @@ Return ONLY the JSON array, no other text."""
                     "reason": item.get("reason", ""),
                 }
                 for item in items
+                if item.get("name")
             ]
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[competitor_discovery] AI competitor discovery failed: {e}")
 
     return _fallback_ai_competitors(brand_name, scrape_data)
 
@@ -287,20 +375,35 @@ def _fallback_ai_competitors(brand_name: str, scrape_data: dict = None) -> list[
 
         # Common global brand names as a broad fallback
         known_brands = [
-            # General consumer
+            # General consumer / athletic
             "Nike", "Adidas", "Under Armour", "Lululemon", "Gymshark",
             "Patagonia", "The North Face", "Columbia", "REI",
             # Beverage / water bottles
             "Hydro Flask", "Stanley", "Yeti", "CamelBak", "Nalgene",
             "S'well", "Takeya", "Contigo", "Thermos", "Zojirushi",
             "Simple Modern", "Iron Flask", "Klean Kanteen", "Corkcicle",
-            # Home / lifestyle
-            "IKEA", "Crate & Barrel", "West Elm", "CB2",
-            # Beauty / personal care
+            # Home / lifestyle / furniture
+            "IKEA", "Crate & Barrel", "West Elm", "CB2", "Wayfair",
+            "Article", "Pottery Barn", "Restoration Hardware",
+            # Beauty / personal care / skincare
             "Glossier", "The Ordinary", "CeraVe", "Drunk Elephant",
+            "La Roche-Posay", "Clinique", "Fenty Beauty", "Tatcha",
+            "Olaplex", "Moroccanoil", "Kiehl's",
             # Medical / scrubs
             "FIGS", "Cherokee", "Dickies", "Carhartt", "Med Couture",
             "Healing Hands", "Jaanuu", "Barco",
+            # Electronics / tech
+            "Apple", "Samsung", "Sony", "Bose", "JBL", "Anker",
+            "Logitech", "Dyson", "iRobot", "Ring",
+            # Pet / food
+            "Chewy", "Blue Buffalo", "Purina", "Hill's", "Royal Canin",
+            "BarkBox", "Kong", "Wellness",
+            # Kitchen / cookware
+            "Le Creuset", "All-Clad", "Lodge", "Instant Pot", "KitchenAid",
+            "Our Place", "Ninja", "Vitamix", "Breville",
+            # Outdoor / camping
+            "Osprey", "Deuter", "Gregory", "MSR", "Big Agnes",
+            "Coleman", "REI Co-op",
         ]
 
         for brand in known_brands:
@@ -315,8 +418,14 @@ def _fallback_ai_competitors(brand_name: str, scrape_data: dict = None) -> list[
     return competitors
 
 
-def _infer_category(ecommerce_data: dict = None) -> str:
-    """Infer product category from e-commerce data to improve search."""
+def _infer_category(ecommerce_data: dict = None, brand_name: str = "") -> str:
+    """Infer product category from e-commerce data.
+
+    Strategy:
+    1. Fast keyword match against known categories (instant, no API call)
+    2. If no match, ask Claude to identify the category from product names (dynamic)
+    3. Last resort: return first product name as-is
+    """
     if not ecommerce_data:
         return ""
 
@@ -327,7 +436,7 @@ def _infer_category(ecommerce_data: dict = None) -> str:
     ]
     all_words = " ".join(product_names)
 
-    # Check for category keywords
+    # Strategy 1: Fast keyword match (no API call needed)
     category_map = {
         # Beverage / drinkware
         "water bottle": "water bottles insulated",
@@ -344,29 +453,85 @@ def _infer_category(ecommerce_data: dict = None) -> str:
         "athletic": "athletic wear",
         "sneaker": "sneakers shoes",
         "shirt": "shirts apparel",
+        "jacket": "jackets outerwear",
+        "hoodie": "hoodies sweatshirts",
+        "legging": "leggings activewear",
+        "dress": "dresses women apparel",
         # Home / kitchen
         "candle": "candles home fragrance",
         "cookware": "cookware kitchen",
         "mattress": "mattresses beds",
-        # Beauty
+        "pillow": "pillows bedding",
+        "blanket": "blankets throws",
+        "furniture": "home furniture",
+        "lamp": "lamps lighting",
+        "rug": "rugs home decor",
+        "pan": "pans cookware",
+        "knife": "kitchen knives",
+        "blender": "blenders kitchen",
+        # Beauty / personal care
         "serum": "skincare serum",
         "moisturizer": "skincare moisturizer",
         "shampoo": "hair care shampoo",
-        # Tech
+        "conditioner": "hair conditioner",
+        "sunscreen": "sunscreen skincare",
+        "cleanser": "face cleanser skincare",
+        "foundation": "foundation makeup",
+        "mascara": "mascara makeup",
+        "lipstick": "lipstick makeup cosmetics",
+        "perfume": "perfume fragrance",
+        # Tech / electronics
         "headphone": "headphones earbuds",
+        "earbud": "earbuds wireless",
         "speaker": "bluetooth speakers",
         "charger": "phone chargers",
+        "laptop": "laptops computers",
+        "tablet": "tablets iPad",
+        "watch": "smartwatch watches",
+        "camera": "cameras photography",
+        "keyboard": "keyboards computer accessories",
+        "mouse": "mouse computer accessories",
+        # Pet
+        "dog food": "dog food pet",
+        "cat food": "cat food pet",
+        "pet toy": "pet toys",
+        "dog treat": "dog treats",
+        "pet bed": "pet beds",
+        # Outdoor / sports
+        "tent": "camping tents outdoor",
+        "backpack": "backpacks outdoor",
+        "sleeping bag": "sleeping bags camping",
+        "bicycle": "bicycles cycling",
+        "golf": "golf equipment",
     }
 
     for keyword, search_term in category_map.items():
         if keyword in all_words:
             return search_term
 
-    # Default: use first product name keywords (cleaned)
+    # Strategy 2: Ask Claude to identify category from product names (dynamic)
     if product_names:
-        # Take the first meaningful product name, strip noise
+        try:
+            from config import ANTHROPIC_API_KEY, MODEL_HAIKU
+            if ANTHROPIC_API_KEY:
+                from anthropic import Anthropic
+                client = Anthropic(api_key=ANTHROPIC_API_KEY)
+                sample = "; ".join(product_names[:10])
+                response = client.messages.create(
+                    model=MODEL_HAIKU,
+                    max_tokens=100,
+                    messages=[{"role": "user", "content": f"What product category are these products? Return ONLY a 2-4 word category search term (e.g., 'wireless earbuds', 'face moisturizer skincare', 'camping tents outdoor'). Products: {sample}"}],
+                )
+                cat = response.content[0].text.strip().strip('"').strip("'").lower()
+                if 2 < len(cat) < 50 and not cat.startswith("i ") and not cat.startswith("the "):
+                    print(f"[competitor_discovery] Claude inferred category: '{cat}'")
+                    return cat
+        except Exception as e:
+            print(f"[competitor_discovery] Category inference failed: {e}")
+
+    # Strategy 3: Use first product name as-is
+    if product_names:
         first = product_names[0][:50]
-        # Remove brand name and common noise words
         return first
 
     return ""

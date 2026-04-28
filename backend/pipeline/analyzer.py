@@ -5,10 +5,11 @@ Supports phase-based analysis:
   - market_structure: Capabilities + Competition (Phase 1+2)
   - full: Everything (Phase 1+2+3+4)
 """
+import asyncio
 import json
 import time
-from anthropic import Anthropic, RateLimitError
-from config import ANTHROPIC_API_KEY
+from anthropic import Anthropic, RateLimitError, APIStatusError, APIConnectionError, APITimeoutError
+from config import ANTHROPIC_API_KEY, MODEL_OPUS
 
 client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 
@@ -38,15 +39,19 @@ There are TWO content formats — match the right one to each field:
 
 ### Format A — CONTENT SLIDES (capabilities, competition, challenges)
 BULLETS: 3 bullets per slide. Each bullet is a FULL PARAGRAPH: 2-4 sentences, rich with specific
-  evidence from the data (prices, percentages, product names, channel details).
+  evidence from the data (prices, percentages, product names, channel details, review quotes,
+  revenue figures, hero product performance). Cite the category's actual attributes — not
+  generic placeholders.
   GOOD: "[Brand] prioritized getting the product right, pricing competitively, and moving fast on Amazon. The founder-led approach focused on product iteration and review velocity rather than brand definition. This built strong initial traction but deferred the harder work of establishing a clear brand identity." (3 sentences)
   BAD: "[Brand] prioritized product quality and pricing." (too thin — no evidence, no depth)
 
 ### Format B — COMPETITOR POSITIONING & KEY LEARNINGS
-Each statement uses BOLD-LABEL: DETAIL format. The label is a 3-5 word theme, the detail is 1-2 sentences.
-  GOOD: "Design creates permission: Minimalist form signals quality and seriousness in a cluttered category."
-  GOOD: "Longevity is the promise: Durability and repairability anchor trust more than feature innovation."
-  GOOD: "Premium invites challenge: High pricing creates opportunity for brands that can match outcomes with better value."
+Each statement uses BOLD-LABEL: DETAIL format. The label is a 3-5 word theme, the detail is ONE concise sentence.
+HARD LIMIT: each "label: detail" string must be ≤110 characters total. Longer text WILL be cut off mid-sentence.
+  GOOD: "Design creates permission: Minimalist form signals quality in a cluttered category." (82 chars ✓)
+  GOOD: "Longevity is the promise: Durability and repairability anchor trust." (68 chars ✓)
+  GOOD: "Premium invites challenge: High pricing creates opportunity for value challengers." (81 chars ✓)
+  BAD: "Design-led steam specialist: Positions Neat as a minimalist, premium alternative to bulky, disposable appliances." (113 chars ✗ — TOO LONG)
 
 ### Format C — CHART SLIDES & INSIGHT BARS
 Short text for chart titles and insight bars. MAX 80 characters, 1 sentence.
@@ -62,7 +67,7 @@ SUMMARY PARAGRAPHS: 3-5 sentences, MAX 350 characters total. Write as connected 
 - Slide title: max 55 characters
 - Insight text (blue bar): max 80 characters
 - Content bullet (Format A): 2-4 sentences, max 350 characters per bullet
-- Competitor label:detail (Format B): max 180 characters
+- Competitor label:detail (Format B): max 110 characters TOTAL (label + ": " + detail)
 - Summary paragraph: max 350 characters
 COUNT YOUR CHARACTERS. Any text exceeding these limits will be truncated and look broken.
 
@@ -70,10 +75,26 @@ COUNT YOUR CHARACTERS. Any text exceeding these limits will be truncated and loo
 - Evidence-based: cite specific data points, prices, phrases from the provided content
 - Strategically honest: surface real weaknesses alongside strengths
 - Implication-driven: every observation should point to a "so what"
-- IMPORTANT: When data is limited, use your industry expertise to INFER and HYPOTHESIZE.
-  Never write "no data available" or "cannot assess". Instead, write what you CAN infer
-  from whatever signals exist (brand name, URL, category, competitors), and flag it as
-  inference. A strategist always has a point of view — even with incomplete data.
+- Category-agnostic: this framework applies to ANY product category. Derive all terminology,
+  attributes, and insights from the actual data provided — never reuse example language as templates.
+  Every category has its own vocabulary — discover it from the data, never borrow from other categories.
+- EVIDENCE HIERARCHY — always distinguish between:
+  1. OBSERVED: directly from desktop research, reviews, e-commerce data (strongest)
+  2. INFERRED: logical deduction from observed signals (e.g., price point → income bracket)
+  3. INDUSTRY KNOWLEDGE: general category/market patterns from your training data (weakest)
+  When making claims, prioritize observed evidence. Use industry knowledge only to fill gaps
+  and frame the analysis — never to fabricate specific numbers, market share, or revenue data.
+- GRACEFUL DEGRADATION: when data is thin for a section, write a shorter but confident
+  assessment based on what IS available. A tight 2-sentence insight beats a padded paragraph
+  of speculation. Never invent specific statistics (e.g., "15% market share") without source data.
+- Authoritative tone: state findings as conclusions, not possibilities. Never use hedge words
+  like "likely", "potentially", "could", "may", "seems to", "appears to", or "tends to".
+  Write as a senior strategist presenting to a CEO — confident, evidence-backed, decisive.
+  Being authoritative does NOT mean fabricating data — it means having a clear point of view
+  grounded in whatever evidence exists.
+- When desktop research provides brand vision, brand culture, revenue data, or hero products,
+  weave these into your analysis as primary evidence. These are high-value signals that
+  distinguish a thorough analysis from a superficial one.
 
 ## FEW-SHOT EXAMPLES — match this quality, density, and tone exactly:
 
@@ -179,34 +200,43 @@ Think of each bullet as a mini-argument: [OBSERVATION with evidence] → [IMPLIC
 ### 1. Execution Summary
 How was this brand built? Was it product-first, channel-first, or brand-first?
 What execution choices defined its trajectory? Infer the founding logic from
-website messaging, product range, pricing, channel presence.
+website messaging, product range, pricing, channel presence. If revenue data,
+founding story, or hero products are available from desktop research, weave them in
+as evidence — these are gold for establishing the brand's growth arc.
 
 ### 2. Product Offering
 What does the brand sell and how does it communicate? Analyze: core benefits emphasized,
-feature language (stretch, pockets, fabric claims), product range breadth (sizes, colors,
-categories), and whether there is emotional storytelling or purely functional communication.
+feature language (category-specific attributes and claims), product range breadth,
+hero products and bestsellers, and whether there is emotional storytelling or purely
+functional communication. Reference specific product names, price points, and hero SKUs
+from the data — not generic category language.
 
 ### 3. Product Fundamentals
-How strong is the actual product? Assess: materials/fabric quality signals, construction
-details, feature set vs. category norms, size range inclusivity, color range, SKU depth.
-Compare to competitor product claims if data is available. Are the fundamentals competitive?
+How strong is the actual product? Assess: materials and construction quality signals,
+feature set vs. category norms, product line depth and breadth, innovation signals
+(patents, proprietary technology, design awards). Compare to competitor product claims
+if data is available. Are the fundamentals competitive for the price tier?
 
 ### 4. Pricing Position
 Where does the brand sit on the price spectrum? Cite actual price points from e-commerce data.
 Assess whether pricing matches brand aspirations. Compare to competitor pricing if available.
-Does the pricing strategy enable or limit growth?
+Does the pricing strategy enable or limit growth? If revenue or market share data exists,
+use it to contextualize whether the pricing strategy is working.
 
 ### 5. Channel Analysis
-How does the brand reach customers? Identify the primary growth engine (Amazon, DTC, wholesale).
-Assess website quality, e-commerce presence, social media mentions, DTC vs. multi-channel mix.
-Which channel drives the business and what does that dependency mean?
+How does the brand reach customers? Identify the primary growth engine (Amazon, DTC, wholesale,
+retail partnerships). Assess website quality, e-commerce presence, social media engagement,
+DTC vs. multi-channel mix. If desktop research includes social media follower counts,
+engagement metrics, or retail distribution data, cite them. Which channel drives the business
+and what does that dependency mean for brand-building?
 
 ### 6. Brand Challenges (identify exactly 3 distinct challenges)
 Find 3 real, specific weaknesses. Look for: naming issues, inconsistent messaging across channels,
 lack of emotional connection, unclear target audience, visual identity gaps, brand architecture
-problems, credibility gaps. Each challenge gets its own slide with 3 bullets and an insight.
-Frame challenge titles as clear statements of the problem (e.g., "THE BRAND NAME CREATES A
-STRUCTURAL CHALLENGE" not "NAMING ISSUES").
+problems, credibility gaps, brand culture that doesn't translate to consumer perception,
+brand vision that isn't reflected in execution. Each challenge gets its own slide with 3 bullets
+and an insight. Frame challenge titles as clear statements of the problem (e.g., "THE BRAND
+NAME CREATES A STRUCTURAL CHALLENGE" not "NAMING ISSUES").
 
 ### 7. Capabilities Summary
 A flowing paragraph (3-5 sentences) synthesizing: what this brand is good at (execution strengths),
@@ -244,7 +274,7 @@ write it as a connected narrative paragraph.
       "title": "[PRODUCT FUNDAMENTALS ASSESSMENT HEADLINE IN CAPS]",
       "bullets": [
         "2-3 sentences about material/fabric quality, construction, and how it compares to competitors",
-        "2-3 sentences about feature set depth (pockets, stretch, breathability, etc.) relative to category norms",
+        "2-3 sentences about feature set depth and key product attributes relative to category norms",
         "2-3 sentences about size/color range, SKU depth, and whether the product line covers the market adequately"
       ],
       "insight": "Strategic assessment of whether product fundamentals are a strength to build on or a gap to close"
@@ -302,8 +332,84 @@ write it as a connected narrative paragraph.
       "customer_perception": ["What customers actually say — quote or paraphrase from reviews", "Another customer perception"],
       "alignment": "Where claims and perception match — be specific about which claims hold up",
       "gaps": "Where they diverge — this is the most strategically important finding. Be specific and cite evidence."
+    }},
+    "clarity_scoring": {{
+      "overall_score": 62,
+      "dimensions": [
+        {{
+          "name": "Positioning Consistency",
+          "score": 7,
+          "max": 10,
+          "evidence": "1-2 sentences explaining the score with specific evidence from website/listings/reviews"
+        }},
+        {{
+          "name": "Core Message Clarity",
+          "score": 5,
+          "max": 10,
+          "evidence": "Is the brand's core promise immediately understandable? Cite specific messaging."
+        }},
+        {{
+          "name": "Category Ownership",
+          "score": 8,
+          "max": 10,
+          "evidence": "Do consumers immediately know what category this brand belongs to?"
+        }},
+        {{
+          "name": "Competitive Differentiation",
+          "score": 4,
+          "max": 10,
+          "evidence": "Can consumers articulate how this brand differs from competitors? Cite review language."
+        }},
+        {{
+          "name": "Cross-Channel Coherence",
+          "score": 6,
+          "max": 10,
+          "evidence": "Is the brand's tone, visual identity, and messaging consistent across website, Amazon, social media?"
+        }}
+      ],
+      "strongest_zone": "Where brand messaging is clearest — e.g., 'Product functionality communication on Amazon listings'",
+      "weakest_zone": "Where messaging is most confused — e.g., 'Brand emotional positioning on homepage vs social media'",
+      "headline": "ONE-LINE DIAGNOSIS IN CAPS — e.g., 'STRONG PRODUCT STORY, WEAK BRAND STORY'"
     }}
   }},
+
+  "hypotheses": [
+    {{
+      "id": "H1",
+      "statement": "Specific testable hypothesis derived from Phase 1 findings — e.g., 'The brand's primary buyer is Gen Z female'",
+      "source": "Where this hypothesis came from — e.g., 'Social media engagement skews young female; TikTok virality'",
+      "confidence": "high/medium/low",
+      "evidence_needed": "What data would confirm or refute this — e.g., 'Survey demographics Q3+Q4'"
+    }},
+    {{
+      "id": "H2",
+      "statement": "Another testable hypothesis — e.g., 'Consumers perceive the brand as overpriced relative to competitors'",
+      "source": "Evidence basis — e.g., 'Review sentiment: 15% mention price negatively'",
+      "confidence": "medium",
+      "evidence_needed": "Consumer willingness-to-pay survey data"
+    }},
+    {{
+      "id": "H3",
+      "statement": "Third hypothesis",
+      "source": "Evidence basis",
+      "confidence": "low",
+      "evidence_needed": "Required validation data"
+    }},
+    {{
+      "id": "H4",
+      "statement": "Fourth hypothesis",
+      "source": "Evidence basis",
+      "confidence": "medium",
+      "evidence_needed": "Required validation data"
+    }},
+    {{
+      "id": "H5",
+      "statement": "Fifth hypothesis",
+      "source": "Evidence basis",
+      "confidence": "medium",
+      "evidence_needed": "Required validation data"
+    }}
+  ],
 
   "next_steps": [
     "Specific recommended action 1 tied directly to a finding above",
@@ -374,32 +480,37 @@ Write each entry with the depth and specificity of a dedicated competitor brief.
 
 For each focused competitor, provide:
 - POSITIONING: 3 bold-label:detail statements. Each label is a 3-5 word STRATEGIC THEME
-  (not generic labels like "Target Audience"). The detail is 1-2 sentences of specific evidence.
+  (not generic labels like "Target Audience"). The detail is ONE concise sentence with evidence.
+  CRITICAL: "label: detail" must be ≤110 chars total. Text boxes are fixed-width — overflow is hidden.
   GOOD labels: "Design-led steam specialist", "Buy-it-for-life mindset", "Chemical-free authority"
-  GOOD labels: "Caregiver-centered brand", "Empathy-led messaging", "Accessible comfort"
   BAD labels: "Target Audience", "Price Point", "Key Differentiator" (too generic, too template-like)
 - KEY LEARNINGS: 3 bold-label:detail insights. Each label states a strategic principle that
-  {brand_name} can learn from. The detail explains WHY this matters with evidence.
+  {brand_name} can learn from. The detail is ONE sentence explaining WHY with evidence.
+  SAME RULE: "label: detail" ≤110 chars total. No exceptions.
   GOOD labels: "Design creates permission", "Longevity is the promise", "Premium invites challenge"
-  GOOD labels: "Emotional permission matters", "Purpose travels across categories"
   BAD labels: "What works", "Vulnerability", "Learning" (too generic)
 - banner_description: A 1-line strategic framing of this competitor's role in the market.
   GOOD: "Design-led steam specialist positioning Neat as a minimalist premium alternative"
   GOOD: "Prosumer steam specialist bridging mass-market and premium European players"
 
 ### Competitive Landscape Summary
-Group brands by STRATEGIC ROLE (e.g., "Premium Lifestyle", "Heritage Authority", "Value Play",
-"Fashion-Forward"). For each role, name the brands and explain what defines that competitive
-territory. Then identify the white space — the specific positioning territory that NO brand
-currently owns. Be concrete: "No brand currently combines [X capability] with [Y promise]."
+Group brands by STRATEGIC ROLE — use roles that reflect THIS category's actual dynamics,
+not generic templates. Examples from different categories:
+  - Water bottles: "Lifestyle Hydration", "Performance & Outdoor", "Premium Design", "Value Volume"
+  - Cosmetics: "Clean Beauty", "Heritage Luxury", "K-Beauty Innovation", "Mass Accessibility"
+  - Tech: "Ecosystem Lock-in", "Budget Disruptor", "Enterprise-First", "Design Premium"
+For each role, name the brands and explain what defines that competitive territory. Then
+identify the white space — the specific positioning territory that NO brand currently owns.
+Be concrete: "No brand currently combines [X capability] with [Y promise]."
 
 ### Competition Summary
 Write a flowing paragraph of 3-5 sentences. Name specific brands and their winning strategies.
 State what the competitive landscape rewards and punishes. End with a forward-looking statement
-about what claiming white space requires for {brand_name}.
-GOOD: "The steam cleaner market is divided across brands that win on trust (Bissell), design
-(Dupray), power (McCulloch), longevity (Vapamore), or price, with each owning a single
-decision trigger rather than delivering a complete, modern brand experience."
+about what claiming white space requires for {brand_name}. Reference specific evidence from
+desktop research (market share, revenue, social following) where available.
+GOOD: "The [category] market rewards brands that own a single clear territory — [Competitor A]
+wins on [positioning], [Competitor B] on [positioning], [Competitor C] on [positioning] — while
+punishing brands that try to be everything to everyone."
 
 ## Required Output — return this exact JSON structure:
 
@@ -421,14 +532,14 @@ decision trigger rather than delivering a complete, modern brand experience."
         "name": "Competitor Name",
         "banner_description": "Strategic 1-line framing of their market role (e.g., 'Design-led steam specialist positioning as minimalist premium alternative')",
         "positioning": [
-          {{"label": "3-5 word strategic theme (e.g., 'Design-led steam specialist')", "detail": "1-2 sentences with specific evidence of how they position. Cite product claims, price points, visual identity, channel strategy."}},
-          {{"label": "Another strategic theme (e.g., 'Buy-it-for-life mindset')", "detail": "1-2 sentences. Be specific about HOW this positioning manifests — in messaging, product design, pricing, or customer experience."}},
-          {{"label": "Third strategic theme (e.g., 'Chemical-free authority')", "detail": "1-2 sentences. What emotional or functional territory does this positioning claim?"}}
+          {{"label": "3-5 word theme", "detail": "ONE sentence, max 100 chars. Cite specific evidence (prices, claims, channels)."}},
+          {{"label": "Another theme", "detail": "ONE sentence, max 100 chars. How this positioning manifests concretely."}},
+          {{"label": "Third theme", "detail": "ONE sentence, max 100 chars. What territory does this positioning claim?"}}
         ],
         "key_learnings": [
-          {{"label": "Strategic principle (e.g., 'Design creates permission')", "detail": "1-2 sentences explaining why this matters. Connect to {brand_name}'s situation — what can be borrowed, challenged, or avoided."}},
-          {{"label": "Another principle (e.g., 'Longevity is the promise')", "detail": "1-2 sentences. Identify what makes this competitor vulnerable or what territory they leave open."}},
-          {{"label": "Third principle (e.g., 'Premium invites challenge')", "detail": "1-2 sentences. State the concrete takeaway for {brand_name} — what to do differently."}}
+          {{"label": "Strategic principle", "detail": "ONE sentence, max 100 chars. Why this matters for {brand_name}."}},
+          {{"label": "Another principle", "detail": "ONE sentence, max 100 chars. What vulnerability or open territory this reveals."}},
+          {{"label": "Third principle", "detail": "ONE sentence, max 100 chars. Concrete takeaway for {brand_name}."}}
         ]
       }}
     ],
@@ -451,7 +562,7 @@ decision trigger rather than delivering a complete, modern brand experience."
 }}
 
 CRITICAL RULES:
-- competitor_analyses MUST contain 6-10 entries — analyze real, specific competitors (real cases average 8)
+- competitor_analyses MUST contain exactly 6 entries — the 6 most strategically relevant competitors
 - Each competitor's positioning and key_learnings MUST have exactly 3 entries each
 - market_roles MUST contain exactly 4 roles that cover the market structure
 - Titles must be ALL CAPS and descriptive (e.g., "KEY PLAYERS SHAPING THE [CATEGORY] CATEGORY")
@@ -504,7 +615,14 @@ landscape summary (4 market roles), and competition summary paragraph.
 This is the MOST important section. Based on available review data, e-commerce data, and any
 uploaded research documents, build a comprehensive consumer analysis:
 
-1. Research approach description
+1. Research approach — QUANTITATIVE SURVEY format matching DynaBridge methodology:
+   - Format: Always "Online survey", 10 minutes, Unbranded
+   - Participants: Generate realistic sample size (200-300), age screener (18+ or 22+ depending on category),
+     gender quota appropriate to category (e.g., 70/30 F/M for fashion/beauty, 50/50 for tech/home),
+     category-specific screener criteria (professionals who use the product, or consumers who purchase in category),
+     and "primary or shared decision-maker" qualifier
+   - Analysis sections: Demographics, Shopping Habits, Brand Evaluation, Market Segmentation
+   - Timing: Use the provided date
 2. Shopping habits and purchase drivers (generate chart data from reviews/e-commerce signals)
 3. Brand perception analysis
 4. Consumer segmentation: identify 4-5 distinct consumer segments based on the data.
@@ -636,45 +754,46 @@ uploaded research documents, build a comprehensive consumer analysis:
   "consumer": {{
     "overview": "2-3 sentence consumer landscape summary — who buys in this category and what matters to them",
     "research_approach": [
-      {{"label": "Format", "detail": "e.g. Review analysis + e-commerce data mining + secondary research"}},
-      {{"label": "Data Sources", "detail": "e.g. Amazon reviews (N=XXX), brand website, competitor listings"}},
-      {{"label": "Participants", "detail": "Description of the consumer base analyzed"}},
-      {{"label": "Analysis", "detail": "Method used — sentiment analysis, theme extraction, segmentation"}},
-      {{"label": "Timing", "detail": "{date}"}}
+      {{"label": "Format", "detail": "Methodology:\tOnline survey\nLength:\t\t10 minutes\nBranding:\tUnbranded"}},
+      {{"label": "Participants", "detail": "Total of [N] US Consumers:\nUS resident; [age]+ years old\nQuota on Gender: Female ([X]%) Male ([Y]%)\n[Category-specific screener — derive from the actual product category]\n[Additional qualification if relevant to this specific category]\nPrimary or shared decision-maker when purchasing their own [category]"}},
+      {{"label": "Analysis", "detail": "Demographics & Background\nShopping Habits, Category Usage and Ownership\nBrand Evaluation & Competitor Analysis\nMarket Segmentation"}},
+      {{"label": "Timing", "detail": "Fielding: {date}"}}
     ],
+    "gender_data": {{"male_pct": 30, "female_pct": 70}},
+    "marital_data": {{"married_pct": 52, "single_pct": 33, "divorced_pct": 15}},
     "charts": [
-      // SECTION: Demographics (4-5 charts) — divider auto-inserted
+      // SECTION: Demographics (4 charts) — divider auto-inserted
       {{
-        "chart_type": "vbar",
-        "title": "RESPONDENT GENERATION PROFILE",
+        "chart_type": "hbar",
+        "section": "demographics",
+        "title": "GENERATION",
         "subtitle": "Generation distribution of survey respondents",
-        "categories": ["Gen Z (18-27)", "Millennial (28-43)", "Gen X (44-59)", "Boomer (60+)"],
+        "categories": ["Gen Z (1997 to 2009)", "Millennials (1981 to 1996)", "Gen X (1965 to 1980)", "Boomers (1946 to 1964)"],
         "values": [15, 45, 30, 10]
       }},
       {{
-        "chart_type": "dual",
-        "title": "GENDER AND ETHNICITY BREAKDOWN",
-        "subtitle": "Respondent demographic composition",
-        "left_type": "donut", "left_title": "Gender",
-        "left_categories": ["Female", "Male", "Non-binary"],
-        "left_values": [70, 28, 2],
-        "right_type": "hbar", "right_title": "Race / Ethnicity",
-        "right_categories": ["White/Caucasian", "Black/African American", "Hispanic/Latino", "Asian/Pacific Islander"],
-        "right_values": [52, 22, 15, 11]
+        "chart_type": "vbar",
+        "section": "demographics",
+        "title": "RACE / ETHNICITY",
+        "subtitle": "Respondent racial and ethnic composition",
+        "categories": ["White or Caucasian", "Black or African American", "Hispanic or Latino", "Asian", "Other"],
+        "values": [52, 22, 15, 8, 3]
+      }},
+      {{
+        "chart_type": "vbar",
+        "section": "demographics",
+        "title": "HOUSEHOLD INCOME",
+        "subtitle": "Annual household income distribution",
+        "categories": ["Low income", "Lower middle income", "Upper middle income", "High income"],
+        "values": [8, 24, 40, 28]
       }},
       {{
         "chart_type": "hbar",
-        "title": "HOUSEHOLD INCOME DISTRIBUTION",
-        "subtitle": "Annual household income brackets",
-        "categories": ["Under $25K", "$25K-$49K", "$50K-$74K", "$75K-$99K", "$100K-$149K", "$150K+"],
-        "values": [8, 18, 24, 22, 18, 10]
-      }},
-      {{
-        "chart_type": "hbar",
-        "title": "SOCIAL MEDIA PLATFORMS USED",
-        "subtitle": "Which social media platforms respondents frequently use",
-        "categories": ["YouTube", "Instagram", "Facebook", "TikTok", "Pinterest", "X/Twitter", "Reddit"],
-        "values": [78, 65, 62, 48, 35, 28, 22]
+        "section": "demographics",
+        "title": "SOCIAL MEDIA PLATFORM USAGE",
+        "subtitle": "Which social media platforms do you frequently use?",
+        "categories": ["Facebook", "YouTube", "Instagram", "TikTok", "Snapchat", "X/Twitter", "LinkedIn", "Other"],
+        "values": [78, 75, 65, 55, 40, 32, 28, 2]
       }},
       // SECTION: Shopping Habits (6-8 charts) — divider auto-inserted
       {{
@@ -739,7 +858,7 @@ uploaded research documents, build a comprehensive consumer analysis:
         "chart_type": "wordcloud",
         "title": "WHAT CONSUMERS SAY ABOUT [CATEGORY]",
         "subtitle": "Word frequency from open-ended responses and reviews",
-        "words": {{"comfortable": 85, "durable": 72, "affordable": 60, "quality": 55, "stretchy": 48, "soft": 45, "professional": 42, "breathable": 38, "pockets": 35, "stylish": 32, "lightweight": 30, "flattering": 28, "modern": 25, "sustainable": 22, "innovative": 20}}
+        "words": "Generate 15-20 words/phrases that consumers in THIS specific category actually use. Derive from review data, brand messaging, and category vocabulary. Each word gets a frequency weight 20-100."
       }},
       // SECTION: Brand Evaluation (4-5 charts) — divider auto-inserted
       {{
@@ -896,7 +1015,7 @@ CRITICAL RULES:
   * 4 lifestyle_signals (social media, music, car brand, key stat) for cultural profiling
   * mini_tables with item+pct data for purchase_drivers, pain_points, pre_purchase, social_media
 - brand_challenges MUST contain exactly 3 entries, each with Format A bullets (2-4 sentence paragraphs).
-- competitor_analyses MUST contain 6-10 entries (real cases average 8 competitors).
+- competitor_analyses MUST contain exactly 6 entries — the 6 most strategically relevant competitors.
   Each must use Format B (bold-label: detail) for both positioning and key_learnings.
   Labels must be STRATEGIC THEMES, not generic labels like "Target Audience" or "What works".
 - All content bullets must be 2-4 sentence paragraphs with specific evidence (Format A).
@@ -905,8 +1024,9 @@ CRITICAL RULES:
 - deprioritized_segments: for EACH non-primary segment, state the specific strategic risk
   (e.g., "Promotion-driven, competing here risks compressing margins and weakening premium positioning")
 - competitive_fares must name specific competitors and what they win on (e.g., "Brand A → Innovation, Brand B → Heritage")
+- Include top-level "gender_data": {"male_pct": XX, "female_pct": XX} and "marital_data": {"married_pct": XX, "single_pct": XX, "divorced_pct": XX} in the consumer object (not as charts). Do NOT create a separate gender chart — gender is displayed via icon, not chart.
 - Generate 15-20 charts organized in 4 sections (real cases average 22-29 chart slides):
-  * Demographics (4-5): generation vbar, gender+ethnicity dual, income hbar, social media hbar
+  * Demographics (4 SEPARATE charts — do NOT combine them): (1) generation hbar with chart_type "hbar" and title containing "GENERATION" (labels like "Gen Z (1997 to 2009)", "Millennials (1981 to 1996)", etc.), (2) race/ethnicity vbar with chart_type "vbar" and title containing "RACE" or "ETHNICITY" (labels like "White or Caucasian", "Black or African American", etc.), (3) household income vbar with chart_type "vbar" and title containing "INCOME" (4 brackets: "Low income", "Lower middle income", "Upper middle income", "High income"), (4) social media platform usage hbar with chart_type "hbar" and title containing "SOCIAL MEDIA"
   * Shopping Habits (5-7): purchase frequency+spend dual, channels hbar, occasions hbar, pre-purchase hbar
   * Purchase Drivers (3-4): top drivers hbar, premium definition hbar, willingness-to-pay dual, wordcloud (MUST include 40-60 words with varied frequencies from 5 to 100)
   * Brand Evaluation (4-5): brand metrics grouped_bar (brands on Y, Awareness/Purchase/Satisfaction/Recommend as groups), favorite brand donut, brand switching hbar, brand association matrix
@@ -930,6 +1050,8 @@ async def analyze_brand(
     review_data: dict = None,
     competitor_data: list[dict] = None,
     desktop_research: dict = None,
+    survey_mode: str = "simulated",
+    real_survey_responses: dict = None,
 ) -> dict:
     """Run Claude AI analysis on brand data and return structured JSON.
 
@@ -972,7 +1094,11 @@ async def analyze_brand(
             review_data=review_text,
             date=date_str,
         )
-        p1_result = _call_claude(p1_prompt, max_tokens=8000)
+        p1_result = await _call_claude(p1_prompt, max_tokens=12000)
+        if "raw_analysis" in p1_result:
+            print("[analyzer] Phase 1 JSON parse failed, retrying...")
+            await asyncio.sleep(10)
+            p1_result = await _call_claude(p1_prompt, max_tokens=12000)
         print(f"[analyzer] Phase 1 complete. Keys: {list(p1_result.keys()) if isinstance(p1_result, dict) else 'not dict'}")
         await asyncio.sleep(5)  # Brief cooldown between API calls
 
@@ -1011,7 +1137,12 @@ async def analyze_brand(
             competitor_review_data=comp_enriched,
             phase1_context=p1_context or "Phase 1 analysis completed — assess competition independently",
         )
-        p2_result = _call_claude(p2_prompt, max_tokens=8000)
+        p2_result = await _call_claude(p2_prompt, max_tokens=12000)
+        if "raw_analysis" in p2_result:
+            print("[analyzer] Phase 2 JSON parse failed, retrying...")
+            await asyncio.sleep(10)
+            p2_result = await _call_claude(p2_prompt, max_tokens=12000)
+        print(f"[analyzer] Phase 2 complete. Keys: {list(p2_result.keys()) if isinstance(p2_result, dict) else 'not dict'}")
 
         # Phase 3: Consumer (feed Phase 1+2 summaries as context)
         p2_context = ""
@@ -1037,13 +1168,106 @@ async def analyze_brand(
         if desktop_research and desktop_research.get("consumer_landscape"):
             cl = desktop_research["consumer_landscape"]
             consumer_research_block = "\n\n## Consumer Research (Web Search Findings)\n"
-            consumer_research_block += json.dumps(cl, indent=2, default=str)[:4000]
+            consumer_research_block += json.dumps(cl, indent=2, default=str)[:8000]
+
+        # ── Survey-backed data: design questionnaire + simulate/use real responses ──
+        survey_data_block = ""
+        survey_responses = None
+
+        # If real survey responses were uploaded, use them directly
+        if survey_mode == "real" and real_survey_responses:
+            survey_responses = real_survey_responses
+            if survey_responses.get("demographics"):
+                demo = survey_responses["demographics"]
+                survey_data_block = "\n\n## Real Survey Data (uploaded responses, use these exact numbers for charts)\n"
+                survey_data_block += json.dumps({
+                    "demographics": demo,
+                    "question_data": survey_responses.get("question_data", {}),
+                    "category_specific": survey_responses.get("category_specific", []),
+                }, indent=2, default=str)[:5000]
+                print(f"[analyzer] Using REAL survey responses: {survey_responses.get('sample_size', '?')} respondents, {len(survey_responses.get('question_data', {}))} questions")
+
+        # Otherwise, design + simulate
+        if not survey_responses:
+            try:
+                from pipeline.survey_designer import design_survey
+                from pipeline.survey_simulator import simulate_survey_responses
+
+                # Detect category from Phase 1
+                category = ""
+                if isinstance(p1_result, dict):
+                    cap = p1_result.get("capabilities", {})
+                    category = cap.get("category", cap.get("product_category", ""))
+
+                questionnaire = await design_survey(
+                    brand_name=brand_name,
+                    brand_url=brand_url,
+                    competitors=competitors or [],
+                    category=category,
+                    language=language,
+                    analysis_context=p2_context[:2000],
+                    desktop_research=desktop_research,
+                )
+
+                # Build context summary for simulation grounding
+                sim_context = f"Category: {category}\n"
+                if consumer_research_block:
+                    sim_context += consumer_research_block[:2000]
+                if p2_context:
+                    sim_context += f"\nCompetitive context: {p2_context[:1000]}"
+
+                survey_responses = await simulate_survey_responses(
+                    questionnaire=questionnaire,
+                    brand_name=brand_name,
+                    category=category,
+                    brand_context=sim_context,
+                    sample_size=200,
+                )
+
+                if survey_responses and survey_responses.get("demographics"):
+                    demo = survey_responses["demographics"]
+                    survey_data_block = "\n\n## Simulated Survey Data (n=200, use these exact numbers for charts)\n"
+                    survey_data_block += json.dumps({
+                        "demographics": demo,
+                        "question_data": {k: v for k, v in survey_responses.get("question_data", {}).items()},
+                        "category_specific": survey_responses.get("category_specific", []),
+                    }, indent=2, default=str)[:5000]
+                    print(f"[analyzer] Survey simulation complete: {len(survey_responses.get('question_data', {}))} questions simulated")
+            except Exception as e:
+                print(f"[analyzer] Survey simulation failed (non-fatal): {e}")
+
+        # Build enriched Phase 1 context with brand vision/culture/revenue for consumer grounding
+        p1_enriched_context = p1_context
+        if desktop_research and desktop_research.get("brand_context"):
+            bc = desktop_research["brand_context"]
+            enrichment_parts = []
+            if bc.get("brand_vision"):
+                enrichment_parts.append(f"Brand Vision: {bc['brand_vision']}")
+            if bc.get("brand_culture"):
+                enrichment_parts.append(f"Brand Culture: {bc['brand_culture']}")
+            revenue = bc.get("revenue_data", {})
+            if isinstance(revenue, dict) and revenue.get("estimated_revenue"):
+                enrichment_parts.append(f"Revenue: {revenue['estimated_revenue']}")
+                if revenue.get("growth_trajectory"):
+                    enrichment_parts.append(f"Growth: {revenue['growth_trajectory']}")
+            hero = bc.get("hero_products", [])
+            if hero:
+                hero_names = [h.get("name", h) if isinstance(h, dict) else str(h) for h in hero[:5]]
+                enrichment_parts.append(f"Hero Products: {', '.join(hero_names)}")
+            cat_land = bc.get("category_landscape", {})
+            if isinstance(cat_land, dict):
+                if cat_land.get("category_name"):
+                    enrichment_parts.append(f"Category: {cat_land['category_name']}")
+                if cat_land.get("market_size"):
+                    enrichment_parts.append(f"Market Size: {cat_land['market_size']}")
+            if enrichment_parts:
+                p1_enriched_context = p1_context + "\n\n### Brand Intelligence (from desktop research)\n" + "\n".join(enrichment_parts)
 
         # Override the full prompt to only request consumer + summary sections
         consumer_only_prompt = f"""Based on the following Phase 1 and Phase 2 findings, produce the CONSUMER section and final summary.
 
 ## Phase 1 Summary (Capabilities)
-{p1_context}
+{p1_enriched_context}
 
 ## Phase 2 Summary (Competition)
 {p2_context}
@@ -1057,6 +1281,7 @@ async def analyze_brand(
 ## Competitor Data
 {comp_detail_text}
 {consumer_research_block}
+{survey_data_block}
 
 ## Uploaded Documents
 {doc_text or "No documents uploaded"}
@@ -1067,6 +1292,48 @@ Language: {language}. Date: {date_str}.
 Return this JSON structure:
 {{
   "consumer": {{... the full consumer section as specified in the system prompt ...}},
+  "hypothesis_validation": [
+    {{
+      "id": "H1",
+      "statement": "The hypothesis from Phase 1/2 being tested",
+      "source_phase": "Phase 1 or Phase 2",
+      "status": "confirmed|partially_supported|refuted",
+      "evidence": "2-3 sentences citing specific consumer data that validates or contradicts this hypothesis. Reference survey percentages, segment data, or review themes.",
+      "implication": "1 sentence on what this means for brand strategy"
+    }}
+  ],
+  "conflict_matrix": {{
+    "segments": ["Segment A", "Segment B", "Segment C", "Segment D", "Segment E"],
+    "conflicts": [
+      {{
+        "segment_a": "Segment A name",
+        "segment_b": "Segment B name",
+        "severity": "high|medium|low",
+        "description": "1-2 sentences explaining the core conflict — what Segment A wants that directly contradicts Segment B's preferences. Be specific about the trade-off."
+      }}
+    ],
+    "strategic_implication": "2-3 sentences summarizing what the conflict pattern means for target selection. Which segments are compatible? Which are mutually exclusive?"
+  }},
+  "evidence_plan": {{
+    "hypotheses_to_validate": [
+      {{
+        "hypothesis": "H1 statement",
+        "data_type": "Quantitative survey / Review mining / Social listening",
+        "collection_method": "Specific survey questions or data sources",
+        "sample_target": "n=200, age 18+, category purchasers"
+      }}
+    ],
+    "questionnaire_summary": {{
+      "total_questions": 22,
+      "sections": ["Demographics (5 questions)", "Shopping Habits (6)", "Purchase Drivers (4)", "Brand Evaluation (4)", "Lifestyle (3)"],
+      "target_respondent": "Description of ideal survey respondent — derive from the actual product category and target market",
+      "estimated_duration": "10 minutes"
+    }},
+    "coverage_gaps": [
+      "Data limitation 1 — e.g., 'No in-store shopper journey data available'",
+      "Data limitation 2 — e.g., 'Social listening limited to public posts; no DM/community sentiment'"
+    ]
+  }},
   "summary_and_next_steps": {{
     "capabilities_column": "Paragraph summarizing Step 1 findings",
     "competition_column": "Paragraph summarizing Step 2 findings",
@@ -1077,7 +1344,25 @@ Return this JSON structure:
 }}
 
 CRITICAL RULES:
-- Generate 15-20 charts with plausible data organized in 4 sections: Demographics (4-5 charts: generation vbar, gender+ethnicity dual, income hbar, social media hbar), Shopping Habits (5-7: frequency+spend dual, channels hbar, occasions hbar, pre-purchase hbar), Purchase Drivers (3-4: top drivers hbar, premium definition hbar, WTP dual, wordcloud with 40-60 words), Brand Evaluation (4-5: grouped_bar brand metrics, favorite brand donut, switching hbar, association matrix). MUST include at least one "grouped_bar" and one "matrix" chart.
+- If "Simulated Survey Data" is provided above, you MUST use those exact numbers for all demographics charts (generation, ethnicity, income, social media, gender, marital). Do NOT invent your own numbers — use the survey data verbatim. For other charts (shopping, drivers, brand), also use survey question_data values where available.
+- If category_specific data is provided (e.g., occupation charts), include those as additional charts with section "Demographics" right after social media.
+- Include "gender_data": {{"male_pct": XX, "female_pct": XX}} and "marital_data": {{"married_pct": XX, "single_pct": XX, "divorced_pct": XX}} at consumer top level. Do NOT create a separate gender chart. Generate 15-20 charts in 4 sections: Demographics (4 SEPARATE charts — never combine: generation hbar with chart_type "hbar" and title "GENERATION" with birth-year labels, race/ethnicity vbar with chart_type "vbar" and title "RACE / ETHNICITY", household income vbar with chart_type "vbar" and title "HOUSEHOLD INCOME" with 4 brackets, social media hbar with chart_type "hbar" and title "SOCIAL MEDIA PLATFORM USAGE"), Shopping Habits (5-7: frequency+spend dual, channels hbar, occasions hbar, pre-purchase hbar), Purchase Drivers (3-4: top drivers hbar, premium definition hbar, WTP dual, wordcloud with 40-60 words), Brand Evaluation (4-5: grouped_bar brand metrics, favorite brand donut, switching hbar, association matrix). MUST include at least one "grouped_bar" and one "matrix" chart.
+
+## GENERALIZATION — Category-Agnostic Quality Standards
+- This analysis framework works for ANY product category. NEVER use category-specific language
+  from examples as templates. Instead, derive ALL terminology, attributes, pain points, and
+  purchase drivers from the ACTUAL data provided (e-commerce listings, reviews, desktop research,
+  competitor data).
+- Chart labels, purchase drivers, pain points, and premium definitions MUST reflect the
+  SPECIFIC category being analyzed. Derive these from the brand's actual reviews, competitor
+  landscape, and consumer data — NEVER reuse example labels verbatim.
+- Segment names, taglines, and narratives must be grounded in the category's actual consumer
+  dynamics — not generic archetypes. Use desktop research consumer landscape data, review themes,
+  and competitive positioning to inform segment creation.
+- The wordcloud MUST contain 40-60 words derived from actual review language and category
+  terminology — not generic placeholder words.
+
+## Segment Quality Standards
 - Generate 4-5 consumer segments, each with:
   * Evocative 2-word name (GOOD: "Endurance First", "Vivid Collector", "Tender Caregiver")
   * First-person tagline that sounds authentic, not corporate
@@ -1085,15 +1370,24 @@ CRITICAL RULES:
     Example: "Meet the Performance Seeker: Picture someone testing the product to its limits in daily use..."
   * Specific what_premium_means (cite attributes + percentages)
   * 4 lifestyle_signals for cultural profiling (social media, music, car brand, key stat)
-  * mini_tables with item+pct data for chart rendering
+  * mini_tables with item+pct data for chart rendering — items MUST be category-specific
+    (NOT generic "Quality", "Price" — use specific attributes from the actual product category)
 - MUST include "deprioritized_segments" array: for EACH non-primary segment, state the specific
   strategic risk (e.g., "Promotion-driven, competing here risks compressing margins and weakening
   premium positioning. Too narrow to build long-term brand authority around.")
 - MUST include "competitive_fares" object: brand_strengths (name competitors and what they win on,
   e.g., "Brand A → Innovation, Brand B → Heritage, Brand C → Value"), category_compromise,
   strategic_opportunity, strategic_question.
+
+## Writing Quality — Non-Negotiable
+- State findings as conclusions, not possibilities. Never use hedge words: "likely", "potentially",
+  "could", "may", "seems", "appears to", "tends to", "suggests that".
+- Write as a senior strategist presenting to a CEO. Every sentence earns its place with evidence
+  or strategic implication. No filler, no throat-clearing, no "It is worth noting that".
+- Segment narratives must be cinematic: open with a specific scene, not a data dump. The reader
+  should SEE the person before reading the numbers.
 - Output ONLY JSON."""
-        p3_result = _call_claude(consumer_only_prompt, max_tokens=16000)
+        p3_result = await _call_claude(consumer_only_prompt, max_tokens=16000, use_thinking=True)
 
         # Debug: log what Phase 3 returned
         if isinstance(p3_result, dict):
@@ -1110,6 +1404,12 @@ CRITICAL RULES:
         if isinstance(p1_result, dict):
             merged["capabilities"] = p1_result.get("capabilities", {})
             merged["next_steps"] = p1_result.get("next_steps", [])
+            # Phase 1 hypotheses + clarity scoring
+            if p1_result.get("hypotheses"):
+                merged["hypotheses_phase1"] = p1_result["hypotheses"]
+            cap = p1_result.get("capabilities", {})
+            if cap.get("clarity_scoring"):
+                merged["clarity_scoring"] = cap["clarity_scoring"]
         if isinstance(p2_result, dict):
             merged["competition"] = p2_result.get("competition", {})
         if isinstance(p3_result, dict):
@@ -1117,6 +1417,25 @@ CRITICAL RULES:
             merged["summary_and_next_steps"] = p3_result.get("summary_and_next_steps", {})
             if p3_result.get("next_steps"):
                 merged["next_steps"] = p3_result["next_steps"]
+            # Phase 3 new fields
+            if p3_result.get("hypothesis_validation"):
+                merged["hypothesis_validation"] = p3_result["hypothesis_validation"]
+            if p3_result.get("conflict_matrix"):
+                merged["conflict_matrix"] = p3_result["conflict_matrix"]
+            if p3_result.get("evidence_plan"):
+                merged["evidence_plan"] = p3_result["evidence_plan"]
+        # Attach raw survey question_data for dynamic chart generation in ppt_generator
+        if survey_responses and survey_responses.get("question_data"):
+            merged["survey_question_data"] = survey_responses["question_data"]
+        if survey_responses and survey_responses.get("verbatim_responses"):
+            merged["survey_verbatim"] = survey_responses["verbatim_responses"]
+
+        # ── Quality validation: catch gaps before PPT generation ──
+        merged = await _validate_and_patch_analysis(merged, brand_name, ecom_text, review_text)
+
+        # ── Strategy coherence judge: cross-section consistency check ──
+        merged = await _coherence_judge(merged, brand_name)
+
         return merged
 
     elif phase == "brand_reality":
@@ -1131,41 +1450,112 @@ CRITICAL RULES:
             review_data=review_text,
             date=date_str,
         )
-        return _call_claude(prompt, max_tokens=8000)
+        return await _call_claude(prompt, max_tokens=8000)
 
     else:  # market_structure
+        # Run Phase 1 first to get real capabilities context
+        brand_research_block = ""
+        if research_text:
+            brand_research_block = f"\n\n## Desktop Research (Web Search Findings)\n{research_text}\n"
+        p1_prompt = BRAND_REALITY_PROMPT.format(
+            brand_name=brand_name,
+            brand_name_upper=brand_name.upper(),
+            brand_url=brand_url,
+            language=language,
+            scrape_data=(scrape_text or "No website data available") + brand_research_block,
+            document_data=doc_text or "No documents uploaded",
+            ecommerce_data=ecom_text,
+            review_data=review_text,
+            date=date_str,
+        )
+        p1_result = await _call_claude(p1_prompt, max_tokens=12000)
+        p1_context = ""
+        if isinstance(p1_result, dict):
+            cap = p1_result.get("capabilities", {})
+            p1_context = cap.get("capabilities_summary", "")
+
+        # Enrich competitor data with desktop research
+        comp_enriched = comp_detail_text
+        if desktop_research and desktop_research.get("competitor_profiles"):
+            profiles = desktop_research["competitor_profiles"]
+            profile_lines = ["\n### Web-Researched Competitor Profiles"]
+            for cp in profiles:
+                profile_lines.append(
+                    f"\n**{cp.get('name', 'Unknown')}** ({cp.get('category_role', 'direct')})\n"
+                    f"  Products: {cp.get('product_range', 'N/A')}\n"
+                    f"  Pricing: {cp.get('price_range', 'N/A')} ({cp.get('price_positioning', 'N/A')})\n"
+                    f"  Target: {cp.get('target_audience', 'N/A')}\n"
+                    f"  Differentiator: {cp.get('key_differentiator', 'N/A')}\n"
+                )
+            comp_enriched = comp_detail_text + "\n".join(profile_lines)
+
         prompt = MARKET_STRUCTURE_PROMPT.format(
             brand_name=brand_name,
             brand_url=brand_url,
             competitors=comp_text,
-            competitor_scrape_data=comp_detail_text,
-            competitor_ecommerce_data=comp_detail_text,
-            competitor_review_data=comp_detail_text,
-            phase1_context="[Phase 1 results would go here]",
+            competitor_scrape_data=comp_enriched,
+            competitor_ecommerce_data=comp_enriched,
+            competitor_review_data=comp_enriched,
+            phase1_context=p1_context or "Phase 1 analysis completed — assess competition independently",
         )
-        return _call_claude(prompt, max_tokens=8000)
+        p2_result = await _call_claude(prompt, max_tokens=12000)
+
+        # Merge Phase 1 + Phase 2
+        merged = {}
+        if isinstance(p1_result, dict):
+            merged.update(p1_result)
+        if isinstance(p2_result, dict):
+            merged.update(p2_result)
+        return merged
 
 
-def _call_claude(prompt: str, max_tokens: int = 8000) -> dict:
-    """Call Claude API and parse JSON response. Retries on rate limits."""
+async def _call_claude(prompt: str, max_tokens: int = 8000, use_thinking: bool = False) -> dict:
+    """Call Claude API and parse JSON response. Retries on transient errors.
+
+    Args:
+        use_thinking: If True, enable extended thinking for deeper analysis.
+            Best for complex consumer/segmentation analysis where reasoning quality matters.
+    """
     for attempt in range(4):
         try:
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=max_tokens,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            kwargs = {
+                "model": MODEL_OPUS,
+                "max_tokens": max_tokens,
+                "system": SYSTEM_PROMPT,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            if use_thinking:
+                kwargs["thinking"] = {
+                    "type": "enabled",
+                    "budget_tokens": min(10000, max_tokens // 2),
+                }
+            response = await asyncio.to_thread(client.messages.create, **kwargs)
             break
         except RateLimitError:
             if attempt < 3:
                 wait = 30 * (attempt + 1)
                 print(f"[analyzer] Rate limited, waiting {wait}s (attempt {attempt + 1}/4)")
-                time.sleep(wait)
+                await asyncio.sleep(wait)
+            else:
+                raise
+        except (APIStatusError, APIConnectionError, APITimeoutError) as e:
+            if attempt < 3:
+                wait = 10 * (attempt + 1)
+                print(f"[analyzer] Transient error ({type(e).__name__}), retrying in {wait}s (attempt {attempt + 1}/4)")
+                await asyncio.sleep(wait)
             else:
                 raise
 
-    text = response.content[0].text
+    # Extract text from response (may have thinking blocks)
+    text = ""
+    for block in response.content:
+        if hasattr(block, "text"):
+            text = block.text
+            break
+    if not text:
+        # Fallback
+        text = response.content[0].text if response.content else ""
+
     try:
         start = text.find("{")
         end = text.rfind("}") + 1
@@ -1176,6 +1566,472 @@ def _call_claude(prompt: str, max_tokens: int = 8000) -> dict:
         pass
 
     return {"raw_analysis": text}
+
+
+# ── Post-Analysis Quality Validation ─────────────────────────
+
+async def _validate_and_patch_analysis(
+    merged: dict, brand_name: str, ecom_text: str, review_text: str
+) -> dict:
+    """Inspect merged 3-phase analysis and auto-patch quality gaps.
+
+    Checks for empty/placeholder/generic content across all three phases,
+    then uses Claude to fill gaps so PPT generator always receives complete,
+    category-specific data.
+
+    Returns the patched merged dict (mutated in place).
+    """
+    if not client:
+        return merged
+
+    gaps = []  # list of (section, field, reason)
+
+    # ── Phase 1: Capabilities ──
+    cap = merged.get("capabilities", {})
+    if not isinstance(cap, dict) or not cap:
+        gaps.append(("capabilities", "*", "entire capabilities section is empty"))
+    else:
+        # Critical fields that must exist and be non-empty
+        for key in ("execution_summary", "product_offer", "product_fundamentals",
+                     "pricing_position", "channel_analysis"):
+            section = cap.get(key)
+            if not section or not isinstance(section, dict):
+                gaps.append(("capabilities", key, "missing"))
+            elif not section.get("bullets") or len(section.get("bullets", [])) < 2:
+                gaps.append(("capabilities", key, "fewer than 2 bullets"))
+            elif not section.get("insight"):
+                gaps.append(("capabilities", key, "missing insight line"))
+        if not cap.get("capabilities_summary"):
+            gaps.append(("capabilities", "capabilities_summary", "missing summary paragraph"))
+        if not cap.get("brand_challenges") or len(cap.get("brand_challenges", [])) < 1:
+            gaps.append(("capabilities", "brand_challenges", "no brand challenges"))
+
+    # ── Phase 2: Competition ──
+    comp = merged.get("competition", {})
+    if not isinstance(comp, dict) or not comp:
+        gaps.append(("competition", "*", "entire competition section is empty"))
+    else:
+        if not comp.get("market_overview") or not isinstance(comp.get("market_overview"), dict):
+            gaps.append(("competition", "market_overview", "missing"))
+        competitors = comp.get("competitor_analyses", [])
+        if not competitors or len(competitors) < 2:
+            gaps.append(("competition", "competitor_analyses", f"only {len(competitors)} competitors (need 3+)"))
+        if not comp.get("competition_summary"):
+            gaps.append(("competition", "competition_summary", "missing summary"))
+
+    # ── Phase 3: Consumer ──
+    consumer = merged.get("consumer", {})
+    if not isinstance(consumer, dict) or not consumer:
+        gaps.append(("consumer", "*", "entire consumer section is empty"))
+    else:
+        segments = consumer.get("segments", [])
+        if not segments or len(segments) < 3:
+            gaps.append(("consumer", "segments", f"only {len(segments)} segments (need 4-5)"))
+        else:
+            for i, seg in enumerate(segments):
+                if not seg.get("narrative") or len(seg.get("narrative", "")) < 50:
+                    gaps.append(("consumer", f"segments[{i}].narrative", "missing or too short"))
+                if not seg.get("demographics"):
+                    gaps.append(("consumer", f"segments[{i}].demographics", "missing"))
+        if not consumer.get("key_insights") or len(consumer.get("key_insights", [])) < 2:
+            gaps.append(("consumer", "key_insights", "fewer than 2 key insights"))
+        if not consumer.get("target_recommendation"):
+            gaps.append(("consumer", "target_recommendation", "missing target recommendation"))
+
+    # ── Summary & Next Steps ──
+    summary = merged.get("summary_and_next_steps", {})
+    for col in ("capabilities_column", "competition_column", "consumer_column", "closing_insight"):
+        if not summary.get(col) or len(summary.get(col, "")) < 20:
+            gaps.append(("summary_and_next_steps", col, "missing or too short"))
+
+    if not gaps:
+        print(f"[analyzer] Quality validation passed — no gaps found")
+        return merged
+
+    print(f"[analyzer] Quality validation found {len(gaps)} gap(s):")
+    for section, field, reason in gaps:
+        print(f"  - {section}.{field}: {reason}")
+
+    # ── Auto-patch with Claude ──
+    gap_descriptions = "\n".join(
+        f"- {section}.{field}: {reason}" for section, field, reason in gaps
+    )
+
+    # Build context from available data
+    context_parts = []
+    if cap.get("capabilities_summary"):
+        context_parts.append(f"Capabilities summary: {cap['capabilities_summary'][:500]}")
+    if comp.get("competition_summary"):
+        context_parts.append(f"Competition summary: {comp['competition_summary'][:500]}")
+    if ecom_text:
+        context_parts.append(f"E-commerce data: {ecom_text[:1500]}")
+    if review_text:
+        context_parts.append(f"Review data: {review_text[:1500]}")
+    existing_context = "\n\n".join(context_parts) if context_parts else "Limited data available."
+
+    patch_prompt = f"""You are patching gaps in a brand analysis for {brand_name}.
+
+## Existing Analysis (partial)
+{json.dumps(merged, indent=2, default=str)[:8000]}
+
+## Supporting Data
+{existing_context}
+
+## Gaps to Fix
+{gap_descriptions}
+
+For each gap listed above, generate the missing content. Match the style, depth, and
+specificity of the existing analysis — do NOT produce generic/placeholder text.
+
+Return ONLY a JSON object with the patched sections. Use the EXACT same key structure
+as the original analysis. Only include the sections/fields that need patching.
+
+Example structure:
+{{
+  "capabilities": {{
+    "capabilities_summary": "...",
+    "brand_challenges": [
+      {{"title": "...", "bullets": ["...", "..."], "insight": "..."}}
+    ]
+  }},
+  "competition": {{
+    "competition_summary": "..."
+  }},
+  "consumer": {{
+    "target_recommendation": {{
+      "segment_name": "...",
+      "rationale": "...",
+      "consumer_summary": "...",
+      "summary_consumer": "..."
+    }}
+  }},
+  "summary_and_next_steps": {{
+    "capabilities_column": "...",
+    "competition_column": "...",
+    "consumer_column": "...",
+    "closing_insight": "..."
+  }}
+}}
+"""
+
+    try:
+        patch_result = await _call_claude(patch_prompt, max_tokens=6000)
+        if "raw_analysis" in patch_result:
+            print(f"[analyzer] Patch call returned unparseable text, skipping auto-patch")
+            return merged
+
+        # Deep-merge patches into merged dict
+        patched_count = 0
+        for section_key, patch_data in patch_result.items():
+            if section_key not in merged or not isinstance(merged.get(section_key), dict):
+                merged[section_key] = patch_data
+                patched_count += 1
+                continue
+            if isinstance(patch_data, dict):
+                for field_key, field_val in patch_data.items():
+                    existing = merged[section_key].get(field_key)
+                    # Only overwrite if the existing value is empty/missing
+                    if not existing or (isinstance(existing, str) and len(existing) < 20) or \
+                       (isinstance(existing, list) and len(existing) < 2):
+                        merged[section_key][field_key] = field_val
+                        patched_count += 1
+
+        print(f"[analyzer] Auto-patched {patched_count} field(s)")
+
+    except Exception as e:
+        print(f"[analyzer] Auto-patch failed ({e}), returning analysis as-is")
+
+    return merged
+
+
+async def _coherence_judge(analysis: dict, brand_name: str) -> dict:
+    """Cross-section strategy coherence check.
+
+    Reads the full analysis and flags/fixes contradictions between sections:
+    - competition says X wins, but target recommendation ignores X
+    - capabilities highlight a strength that consumer data contradicts
+    - segment narrative conflicts with demographic data
+    """
+    if not client:
+        return analysis
+
+    # Build a compact summary for the judge
+    sections = {}
+    cap = analysis.get("capabilities", {})
+    if cap:
+        sections["capabilities_insight"] = cap.get("execution_summary", {}).get("insight", "")
+        sections["product_insight"] = cap.get("product_offer", {}).get("insight", "")
+
+    comp = analysis.get("competition", {})
+    if comp:
+        sections["competition_summary"] = comp.get("competition_summary", "")
+
+    consumer = analysis.get("consumer", {})
+    if consumer:
+        sections["consumer_summary"] = consumer.get("consumer_summary", "")
+        target = consumer.get("target_recommendation", {})
+        if target:
+            sections["target_segment"] = target.get("primary_segment", "")
+            sections["target_rationale"] = " | ".join(target.get("rationale_bullets", [])[:3])
+            sections["target_insight"] = target.get("insight", "")
+        segments = consumer.get("segments", [])
+        if segments:
+            sections["segments"] = [
+                {"name": s.get("name"), "size_pct": s.get("size_pct"), "tagline": s.get("tagline")}
+                for s in segments[:5]
+            ]
+
+    if len(sections) < 3:
+        return analysis  # Not enough data to judge
+
+    try:
+        import json as _json
+        summary = _json.dumps(sections, indent=1, ensure_ascii=False, default=str)[:4000]
+
+        response = await asyncio.to_thread(
+            client.messages.create,
+            model=MODEL_SONNET,
+            max_tokens=800,
+            messages=[{"role": "user", "content": f"""You are a senior brand strategist reviewing a brand discovery analysis for "{brand_name}".
+
+Check for LOGICAL CONTRADICTIONS between sections. Specifically:
+
+1. Does the target segment choice contradict the competitive analysis? (e.g., competition says "differentiation wins" but target is the most generic segment)
+2. Does the capabilities assessment conflict with consumer data? (e.g., capabilities say brand is "innovation-led" but consumers rank innovation last)
+3. Is the target rationale actually supported by the segment data? (e.g., claims "highest spend" but another segment spends more)
+4. Are the deprioritization reasons logically sound? (e.g., deprioritizing a segment for being "too small" when it's actually 25%)
+
+Analysis summary:
+{summary}
+
+If coherent, reply: COHERENT — [one sentence on the strategic logic]
+If contradictions found, reply: CONTRADICTIONS — [list each with fix suggestion]
+
+Keep response under 200 words."""}],
+        )
+        result = response.content[0].text.strip()
+        print(f"[coherence_judge] {result[:150]}")
+
+        # If contradictions found, store them for potential future auto-fix
+        if "CONTRADICTION" in result.upper():
+            analysis["_coherence_issues"] = result
+
+    except Exception as e:
+        print(f"[coherence_judge] Check failed: {e}")
+
+    return analysis
+
+
+# ── Feedback-Aware Section Revision ──────────────────────────
+
+REVISE_SECTION_PROMPT = """You are revising the **{section}** section of a brand discovery report for **{brand_name}**.
+
+## Current {section} analysis
+```json
+{current_json}
+```
+
+## User Feedback
+{feedback}
+
+## Instructions
+1. Read the user feedback carefully. Each item references a specific slide or general issue.
+2. Revise ONLY the parts that the feedback addresses. Do not rewrite content that wasn't criticized.
+3. For "insight" feedback: deepen the analysis, add specificity, replace generic observations with concrete findings.
+4. For "data" feedback: fix incorrect numbers. If you cannot verify, mark with evidence tier INFERRED.
+5. For "image" feedback: update `has_image`, `image_keywords`, or `banner_description` fields so the image collector can find better matches.
+6. For "text" feedback: fix wording, shorten overly long bullets (≤350 chars), fix typos.
+7. For "layout" feedback: adjust content structure (e.g., reduce bullet count, split dense slides).
+8. Preserve the EXACT same JSON structure and all field names. Return the complete revised section.
+9. Maintain the authoritative, insight-driven tone. No hedge words (avoid, perhaps, might, could).
+10. All slide titles must remain ALL CAPS.
+
+Return ONLY the revised JSON object for the "{section}" key. No wrapping, no explanation."""
+
+
+def _identify_affected_submodules(section: str, feedback: str) -> list[str]:
+    """Parse feedback to identify which sub-modules of a section are affected.
+
+    For the consumer section, this avoids sending the entire 30k+ char JSON to Claude
+    by only revising the parts the user complained about.
+    """
+    if section != "consumer":
+        return []  # capabilities and competition are small enough to revise whole
+
+    feedback_lower = feedback.lower()
+    affected = []
+
+    # Map slide content keywords → consumer sub-module keys
+    _SUBMODULE_SIGNALS = {
+        "segments": ["segment", "persona", "target audience", "demographic profile",
+                      "narrative", "tagline", "lifestyle", "mini_table", "pain point",
+                      "shopping behavior", "annual spend"],
+        "target_recommendation": ["target", "primary segment", "rationale",
+                                   "enables", "does not decide"],
+        "deprioritized_segments": ["deprioritize", "low priority", "not target",
+                                    "strategic risk"],
+        "charts": ["chart", "graph", "bar", "donut", "data visualization",
+                    "percentage", "survey result", "response data"],
+        "key_insights": ["insight", "key finding", "takeaway", "strategic implication"],
+        "competitive_fares": ["competitive", "brand strength", "white space",
+                               "opportunity", "category compromise"],
+        "survey": ["survey", "questionnaire", "sample size", "methodology"],
+        "consumer_summary": ["summary", "conclusion", "wrap up", "consumer overview"],
+    }
+
+    for submod, signals in _SUBMODULE_SIGNALS.items():
+        if any(sig in feedback_lower for sig in signals):
+            affected.append(submod)
+
+    # If we can't identify specific sub-modules, fall back to full revision
+    if not affected:
+        return []
+
+    return affected
+
+
+async def revise_section(
+    analysis: dict,
+    section: str,
+    brand_name: str,
+    feedback: str,
+) -> dict | None:
+    """Re-analyze a single section of the brand discovery report incorporating user feedback.
+
+    For large sections (consumer), identifies affected sub-modules from feedback and
+    only sends those parts to Claude for revision, then merges back. This prevents
+    token limit issues and produces more focused revisions.
+
+    Args:
+        analysis: Full analysis dict (all phases merged)
+        section: "capabilities" | "competition" | "consumer"
+        brand_name: Brand name for context
+        feedback: Structured feedback summary from _build_feedback_summary()
+
+    Returns:
+        Revised section dict, or None if revision fails.
+    """
+    if not client:
+        print("[revise_section] No API client, skipping revision")
+        return None
+
+    current_section = analysis.get(section)
+    if not current_section:
+        print(f"[revise_section] Section '{section}' not found in analysis")
+        return None
+
+    # For large consumer sections, try sub-module revision first
+    affected = _identify_affected_submodules(section, feedback)
+    current_json = json.dumps(current_section, indent=2, ensure_ascii=False)
+
+    if affected and len(current_json) > 15000:
+        print(f"[revise_section] Large '{section}' section ({len(current_json)} chars). "
+              f"Revising sub-modules: {affected}")
+        return await _revise_submodules(current_section, section, brand_name, feedback, affected)
+
+    # Standard full-section revision (capabilities, competition, or small consumer)
+    if len(current_json) > 30000:
+        current_json = current_json[:30000] + "\n... (truncated)"
+
+    prompt = REVISE_SECTION_PROMPT.format(
+        section=section,
+        brand_name=brand_name,
+        current_json=current_json,
+        feedback=feedback,
+    )
+
+    print(f"[revise_section] Revising '{section}' with {len(feedback)} chars of feedback")
+    result = await _call_claude(prompt, max_tokens=12000)
+
+    if "raw_analysis" in result:
+        print("[revise_section] JSON parse failed on first attempt, retrying...")
+        await asyncio.sleep(5)
+        result = await _call_claude(prompt, max_tokens=12000)
+
+    if "raw_analysis" in result:
+        print("[revise_section] Revision failed — could not parse revised JSON")
+        return None
+
+    # The LLM should return the section content directly.
+    # If it wrapped it in the section key, unwrap.
+    if section in result and len(result) == 1:
+        result = result[section]
+
+    print(f"[revise_section] Section '{section}' revised. Keys: {list(result.keys()) if isinstance(result, dict) else 'N/A'}")
+    return result
+
+
+REVISE_SUBMODULE_PROMPT = """You are revising part of the **{section}** section of a brand discovery report for **{brand_name}**.
+
+## Sub-module to revise: {submodule_key}
+```json
+{submodule_json}
+```
+
+## User Feedback (relevant to this sub-module)
+{feedback}
+
+## Instructions
+1. Revise ONLY the content in this sub-module based on the feedback.
+2. For "insight" feedback: deepen the analysis with concrete, specific findings.
+3. For "data" feedback: fix incorrect numbers. Mark unverifiable data as INFERRED.
+4. For "image" feedback: update image-related fields (has_image, image_keywords, banner_description).
+5. For "text" feedback: fix wording, enforce ≤350 char bullets, fix typos.
+6. For "layout" feedback: restructure content (reduce bullets, split dense sections).
+7. Preserve the EXACT same JSON structure and all field names.
+8. Authoritative tone only. No hedge words.
+9. All slide titles remain ALL CAPS.
+
+Return ONLY the revised JSON for this sub-module. No wrapping, no explanation."""
+
+
+async def _revise_submodules(
+    current_section: dict,
+    section: str,
+    brand_name: str,
+    feedback: str,
+    affected: list[str],
+) -> dict:
+    """Revise only the affected sub-modules of a large section, then merge back."""
+    revised_section = dict(current_section)  # shallow copy
+
+    for submod_key in affected:
+        submod_data = current_section.get(submod_key)
+        if submod_data is None:
+            print(f"[revise_submodules] Sub-module '{submod_key}' not found, skipping")
+            continue
+
+        submod_json = json.dumps(submod_data, indent=2, ensure_ascii=False)
+        if len(submod_json) > 20000:
+            submod_json = submod_json[:20000] + "\n... (truncated)"
+
+        prompt = REVISE_SUBMODULE_PROMPT.format(
+            section=section,
+            brand_name=brand_name,
+            submodule_key=submod_key,
+            submodule_json=submod_json,
+            feedback=feedback,
+        )
+
+        print(f"[revise_submodules] Revising '{submod_key}' ({len(submod_json)} chars)")
+        result = await _call_claude(prompt, max_tokens=8000)
+
+        if "raw_analysis" in result:
+            print(f"[revise_submodules] '{submod_key}' revision failed, keeping original")
+            continue
+
+        # Unwrap if Claude wrapped it in the key
+        if submod_key in result and len(result) == 1:
+            result = result[submod_key]
+
+        revised_section[submod_key] = result
+        print(f"[revise_submodules] '{submod_key}' revised successfully")
+
+        # Brief cooldown between sub-module revisions
+        if submod_key != affected[-1]:
+            await asyncio.sleep(3)
+
+    return revised_section
 
 
 # ── Input Formatters ──────────────────────────────────────────
@@ -1375,6 +2231,43 @@ def _format_desktop_research(data: dict) -> str:
             concerns = rep.get("concerns_mentioned", [])
             if concerns:
                 parts.append(f"Criticized for: {'; '.join(concerns[:5])}")
+
+        # New enriched research fields (from upgraded managed_agent.py)
+        brand_vision = bc.get("brand_vision", "")
+        if brand_vision:
+            parts.append(f"\n### Brand Vision & Mission\n{brand_vision}")
+
+        brand_culture = bc.get("brand_culture", "")
+        if brand_culture:
+            parts.append(f"\n### Brand Culture & Values\n{brand_culture}")
+
+        revenue = bc.get("revenue_data", {})
+        if revenue and isinstance(revenue, dict):
+            parts.append("\n### Revenue & Business Data")
+            if revenue.get("estimated_revenue"):
+                parts.append(f"Estimated Revenue: {revenue['estimated_revenue']}")
+            if revenue.get("growth_trajectory"):
+                parts.append(f"Growth: {revenue['growth_trajectory']}")
+            if revenue.get("market_share"):
+                parts.append(f"Market Share: {revenue['market_share']}")
+            if revenue.get("employee_count"):
+                parts.append(f"Employees: {revenue['employee_count']}")
+
+        hero_products = bc.get("hero_products", [])
+        if hero_products:
+            parts.append("\n### Hero Products")
+            for hp in hero_products[:8]:
+                if isinstance(hp, dict):
+                    line = f"- {hp.get('name', 'Product')}"
+                    if hp.get("price"):
+                        line += f" (${hp['price']})"
+                    if hp.get("description"):
+                        line += f": {hp['description'][:150]}"
+                    if hp.get("bestseller"):
+                        line += " ★ BESTSELLER"
+                    parts.append(line)
+                elif isinstance(hp, str):
+                    parts.append(f"- {hp}")
 
     return "\n".join(parts) if parts else ""
 
@@ -1593,9 +2486,9 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
     if phase == "market_structure":
         return result
 
-    # Add consumer for full
+    # Add consumer for full — category-agnostic mock data
     result["consumer"] = {
-        "overview": "Consumers who actively research and purchase in this category represent a diverse but segmentable market. Primarily female (70%), Millennial-dominated (55%), and increasingly willing to invest in quality products — 88% agree they'd pay more for products that clearly deliver on what matters to them.",
+        "overview": f"Consumers who actively research and purchase in this category represent a diverse but segmentable market, with clear behavioral clusters that differ in purchase drivers, channel preferences, and willingness to pay for quality.",
         "research_approach": [
             {"label": "Format", "detail": "Review analysis + e-commerce data mining + secondary research"},
             {"label": "Data Sources", "detail": "Amazon reviews, brand website content, competitor listings, industry reports"},
@@ -1603,411 +2496,131 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
             {"label": "Analysis", "detail": "Sentiment analysis, theme extraction, behavioral clustering, competitive benchmarking"},
             {"label": "Timing", "detail": "APRIL 2026"},
         ],
+        "gender_data": {"male_pct": 45, "female_pct": 55},
+        "marital_data": {"married_pct": 48, "single_pct": 37, "divorced_pct": 15},
         "charts": [
-            # ── Demographics (4 charts) ──
-            {
-                "chart_type": "vbar",
-                "title": "RESPONDENT GENERATION PROFILE",
-                "subtitle": "Generation distribution of survey respondents",
-                "categories": ["Gen Z (18-27)", "Millennial (28-43)", "Gen X (44-59)", "Boomer (60+)"],
-                "values": [12, 55, 25, 8],
-            },
-            {
-                "chart_type": "dual",
-                "title": "GENDER AND ETHNICITY BREAKDOWN",
-                "subtitle": "Respondent demographic composition",
-                "left_type": "donut", "left_title": "Gender",
-                "left_categories": ["Female", "Male", "Non-binary"],
-                "left_values": [70, 28, 2],
-                "right_type": "hbar", "right_title": "Race / Ethnicity",
-                "right_categories": ["White/Caucasian", "Black/African American", "Hispanic/Latino", "Asian/Pacific Islander", "Other"],
-                "right_values": [48, 24, 16, 8, 4],
-            },
-            {
-                "chart_type": "hbar",
-                "title": "HOUSEHOLD INCOME DISTRIBUTION",
-                "subtitle": "Annual household income brackets",
-                "categories": ["Under $25K", "$25K-$49K", "$50K-$74K", "$75K-$99K", "$100K-$149K", "$150K+"],
-                "values": [6, 15, 22, 24, 21, 12],
-            },
-            {
-                "chart_type": "hbar",
-                "title": "SOCIAL MEDIA PLATFORMS USED",
-                "subtitle": "Which social media platforms respondents frequently use",
-                "categories": ["YouTube", "Instagram", "Facebook", "TikTok", "Pinterest", "X/Twitter", "Reddit"],
-                "values": [78, 65, 62, 48, 35, 28, 22],
-            },
-            # ── Shopping Habits (5 charts) ──
-            {
-                "chart_type": "dual",
-                "title": "PURCHASE FREQUENCY AND ANNUAL SPEND",
-                "subtitle": "How often and how much respondents spend on products",
-                "left_type": "donut", "left_title": "Purchase frequency (past 12 months)",
-                "left_categories": ["Monthly+", "Every 2-3 months", "2-3x/year", "Once/year", "When needed"],
-                "left_values": [18, 42, 27, 7, 6],
-                "right_type": "hbar", "right_title": "Annual spend on products",
-                "right_categories": ["Under $100", "$100-$199", "$200-$299", "$300-$499", "$500+"],
-                "right_values": [10, 22, 30, 25, 13],
-            },
-            {
-                "chart_type": "hbar",
-                "title": "WHERE CONSUMERS PURCHASE PRODUCTS",
-                "subtitle": "Primary purchase channels (select all that apply)",
-                "categories": ["Amazon", "Specialty retailers", "Walmart", "Brand websites (DTC)", "Target", "Other online"],
-                "values": [59, 51, 38, 41, 26, 25],
-            },
-            {
-                "chart_type": "hbar",
-                "title": "WHEN AND WHY CONSUMERS PURCHASE PRODUCTS",
-                "subtitle": "Usage occasions and triggers",
-                "categories": ["Regular replacement cycle", "Worn out / damaged", "New job / role change", "Seasonal refresh", "Sale / promotion", "Gift"],
-                "values": [65, 52, 38, 28, 22, 8],
-            },
-            {
-                "chart_type": "hbar",
-                "title": "PRE-PURCHASE ACTIVITIES",
-                "subtitle": "Steps taken before buying products",
-                "categories": ["Read online reviews", "Compare prices across sites", "Visit brand website", "Ask coworkers", "Watch YouTube reviews", "Try in store", "Check social media"],
-                "values": [78, 62, 45, 42, 35, 30, 25],
-            },
-            # ── Purchase Drivers (4 charts) ──
-            {
-                "chart_type": "hbar",
-                "title": "WHAT MATTERS MOST IN PRODUCTS",
-                "subtitle": "Top purchase drivers (select top 3)",
-                "categories": ["All-day comfort", "Stretch and flexibility", "Durability after washing", "Breathability", "Easy care", "Pockets / storage", "Fluid resistance", "Soft hand feel", "Consistent sizing"],
-                "values": [61, 42, 40, 28, 27, 23, 18, 17, 15],
-            },
-            {
-                "chart_type": "hbar",
-                "title": "WHAT DOES 'PREMIUM' MEAN IN PRODUCTS?",
-                "subtitle": "Consumer definition of premium (select all that apply)",
-                "categories": ["Superior materials / technology", "Strong brand reputation", "Modern design / aesthetics", "Longer lasting durability", "Sustainable / ethical materials", "Expert endorsements"],
-                "values": [52, 38, 35, 32, 28, 22],
-            },
-            {
-                "chart_type": "dual",
-                "title": "WILLINGNESS TO PAY FOR QUALITY",
-                "subtitle": "Price sensitivity and premium willingness",
-                "left_type": "donut", "left_title": "Willing to pay more\nfor quality products",
-                "left_categories": ["Strongly agree", "Somewhat agree", "Neutral", "Disagree"],
-                "left_values": [35, 40, 15, 10],
-                "right_type": "hbar", "right_title": "Expected price per piece\nfor quality products",
-                "right_categories": ["Under $25", "$25-$39", "$40-$59", "$60-$89", "$90+"],
-                "right_values": [8, 28, 35, 22, 7],
-            },
-            {
-                "chart_type": "wordcloud",
-                "title": "WHAT CONSUMERS SAY ABOUT PRODUCTS",
-                "subtitle": "Word frequency from open-ended responses and reviews",
-                "words": {
-                    "comfortable": 100, "durable": 90, "stretchy": 85, "soft": 82,
-                    "pockets": 78, "breathable": 75, "professional": 70, "affordable": 68,
-                    "quality": 65, "lightweight": 62, "flattering": 58, "modern": 55,
-                    "long-lasting": 52, "easy to use": 50, "sizing": 48, "colors": 45,
-                    "well made": 42, "value": 40, "stylish": 38, "reliable": 35,
-                    "everyday use": 33, "athletic": 30, "sustainable": 28, "innovative": 25,
-                    "fit": 95, "price": 88, "material": 72, "design": 60, "functional": 55,
-                    "reliable": 50, "versatile": 48, "practical": 45, "trendy": 40,
-                    "performance": 38, "easy care": 35, "true to size": 32, "color options": 30,
-                    "well made": 28, "great fabric": 25, "love it": 22, "recommend": 20,
-                    "worth it": 18, "everyday wear": 15, "work approved": 12, "long lasting": 10,
-                    "good pockets": 8, "nice feel": 7, "runs small": 6, "great value": 5,
-                },
-            },
-            # ── Brand Evaluation (5 charts) ──
-            {
-                "chart_type": "grouped_bar",
-                "title": "BRAND METRICS — AWARENESS TO ADVOCACY",
-                "subtitle": "Brand performance across key metrics",
-                "horizontal": True,
-                "categories": ["Competitor F", "Competitor B", "Competitor A", "Competitor C", "Competitor D", f"{bn}", "Competitor E", "Competitor G"],
-                "groups": [
-                    {"name": "Awareness", "values": [84, 78, 65, 62, 42, 38, 28, 16]},
-                    {"name": "Purchase", "values": [52, 48, 35, 30, 22, 18, 15, 8]},
-                    {"name": "Satisfaction", "values": [72, 68, 82, 75, 70, 78, 65, 72]},
-                    {"name": "Recommend", "values": [55, 50, 72, 58, 52, 65, 48, 55]},
-                ],
-            },
-            {
-                "chart_type": "donut",
-                "title": "FAVORITE PRODUCTS BRAND REGARDLESS OF PRICE",
-                "subtitle": "Which brand is your absolute favorite?",
-                "center_text": "N=200",
-                "categories": ["Competitor A", "Competitor B", "Competitor F", "Competitor C", f"{bn}", "Competitor D", "No favorite"],
-                "values": [24, 18, 16, 12, 10, 8, 12],
-            },
-            {
-                "chart_type": "hbar",
-                "title": "LIKELIHOOD TO TRY A NEW PRODUCTS BRAND",
-                "subtitle": "How open are consumers to switching brands?",
-                "categories": ["Very likely", "Somewhat likely", "Neutral", "Somewhat unlikely", "Very unlikely"],
-                "values": [22, 35, 25, 12, 6],
-            },
-            {
-                "chart_type": "matrix",
-                "title": "BRAND ASSOCIATION MATRIX",
-                "subtitle": "Which brand best fits each description?",
-                "row_labels": ["Best quality", "Best value", "Most innovative", "Most trustworthy", "Most stylish", "Would recommend"],
-                "col_labels": ["Competitor A", "Competitor B", "Competitor F", "Competitor C", f"{bn}", "Competitor D"],
-                "values": [
-                    [42, 18, 15, 22, 20, 12],
-                    [12, 35, 42, 28, 38, 15],
-                    [38, 8, 10, 15, 22, 28],
-                    [35, 42, 32, 38, 18, 12],
-                    [45, 10, 8, 12, 15, 35],
-                    [40, 22, 18, 25, 28, 15],
-                ],
-            },
+            {"chart_type": "hbar", "section": "demographics", "title": "GENERATION", "subtitle": "Generation distribution of survey respondents", "categories": ["Gen Z (1997 to 2009)", "Millennials (1981 to 1996)", "Gen X (1965 to 1980)", "Boomers (1946 to 1964)"], "values": [15, 42, 28, 15]},
+            {"chart_type": "vbar", "section": "demographics", "title": "RACE / ETHNICITY", "subtitle": "Respondent racial and ethnic composition", "categories": ["White or Caucasian", "Black or African American", "Hispanic or Latino", "Asian", "Other"], "values": [52, 18, 17, 9, 4]},
+            {"chart_type": "vbar", "section": "demographics", "title": "HOUSEHOLD INCOME", "subtitle": "Annual household income distribution", "categories": ["Low income", "Lower middle income", "Upper middle income", "High income"], "values": [10, 25, 40, 25]},
+            {"chart_type": "hbar", "section": "demographics", "title": "SOCIAL MEDIA PLATFORM USAGE", "subtitle": "Which social media platforms do you frequently use?", "categories": ["Facebook", "YouTube", "Instagram", "TikTok", "Snapchat", "X/Twitter", "LinkedIn", "Other"], "values": [72, 70, 60, 52, 35, 30, 25, 5]},
+            {"chart_type": "dual", "title": "PURCHASE FREQUENCY AND ANNUAL SPEND", "subtitle": "How often and how much respondents spend", "left_type": "donut", "left_title": "Purchase frequency (past 12 months)", "left_categories": ["Monthly+", "Every 2-3 months", "2-3x/year", "Once/year", "When needed"], "left_values": [15, 35, 30, 12, 8], "right_type": "hbar", "right_title": "Annual spend in category", "right_categories": ["Under $50", "$50-$99", "$100-$199", "$200-$499", "$500+"], "right_values": [12, 25, 30, 22, 11]},
+            {"chart_type": "hbar", "title": "WHERE CONSUMERS PURCHASE", "subtitle": "Primary purchase channels (select all that apply)", "categories": ["Amazon", "Specialty retailers", "Brand websites (DTC)", "Walmart / Target", "Other online", "In-store"], "values": [62, 42, 38, 35, 22, 18]},
+            {"chart_type": "hbar", "title": "PURCHASE TRIGGERS", "subtitle": "What triggers a new purchase?", "categories": ["Replacement / worn out", "Better option discovered", "Seasonal need", "Sale / promotion", "Gift", "New to category"], "values": [58, 42, 30, 25, 15, 10]},
+            {"chart_type": "hbar", "title": "PRE-PURCHASE ACTIVITIES", "subtitle": "Steps taken before buying", "categories": ["Read online reviews", "Compare prices", "Visit brand website", "Ask friends/family", "Watch video reviews", "Try in store", "Check social media"], "values": [75, 60, 42, 38, 32, 28, 22]},
+            {"chart_type": "hbar", "title": f"WHAT MATTERS MOST IN THIS CATEGORY", "subtitle": "Top purchase drivers (select top 3)", "categories": ["Core performance / quality", "Durability / longevity", "Design / aesthetics", "Price / value", "Brand reputation", "Innovation / features", "Sustainability", "Ease of use"], "values": [58, 45, 38, 35, 28, 22, 18, 15]},
+            {"chart_type": "hbar", "title": "WHAT DOES 'PREMIUM' MEAN?", "subtitle": "Consumer definition of premium (select all that apply)", "categories": ["Superior materials / build", "Strong brand reputation", "Modern design / aesthetics", "Longer lasting", "Sustainable / ethical", "Expert endorsements"], "values": [52, 38, 35, 32, 28, 22]},
+            {"chart_type": "dual", "title": "WILLINGNESS TO PAY FOR QUALITY", "subtitle": "Price sensitivity and premium willingness", "left_type": "donut", "left_title": "Willing to pay more\nfor quality", "left_categories": ["Strongly agree", "Somewhat agree", "Neutral", "Disagree"], "left_values": [30, 42, 18, 10], "right_type": "hbar", "right_title": "Expected price range\nfor quality product", "right_categories": ["Budget", "Mid-range", "Premium", "Ultra-premium"], "right_values": [10, 35, 40, 15]},
+            {"chart_type": "wordcloud", "title": f"WHAT CONSUMERS SAY ABOUT {BN}", "subtitle": "Word frequency from reviews and open-ended responses", "words": {"quality": 100, "value": 90, "durable": 85, "design": 80, "reliable": 75, "affordable": 70, "premium": 65, "performance": 62, "recommend": 58, "innovative": 55, "easy to use": 50, "well made": 48, "functional": 45, "stylish": 42, "worth it": 40, "versatile": 38, "practical": 35, "modern": 32, "sustainable": 28, "love it": 25}},
+            {"chart_type": "grouped_bar", "title": "BRAND METRICS — AWARENESS TO ADVOCACY", "subtitle": "Brand performance across key metrics", "horizontal": True, "categories": ["Competitor A", "Competitor B", "Competitor C", "Competitor D", f"{bn}", "Competitor E"], "groups": [{"name": "Awareness", "values": [82, 75, 62, 55, 35, 22]}, {"name": "Purchase", "values": [50, 45, 32, 28, 18, 12]}, {"name": "Satisfaction", "values": [70, 72, 78, 68, 80, 65]}, {"name": "Recommend", "values": [55, 52, 65, 48, 68, 42]}]},
+            {"chart_type": "donut", "title": f"FAVORITE BRAND IN CATEGORY", "subtitle": "Which brand is your absolute favorite?", "center_text": "N=200", "categories": ["Competitor A", "Competitor B", "Competitor C", f"{bn}", "Competitor D", "No favorite"], "values": [25, 20, 15, 12, 10, 18]},
+            {"chart_type": "hbar", "title": "LIKELIHOOD TO TRY A NEW BRAND", "subtitle": "How open are consumers to switching?", "categories": ["Very likely", "Somewhat likely", "Neutral", "Somewhat unlikely", "Very unlikely"], "values": [20, 35, 25, 14, 6]},
+            {"chart_type": "matrix", "title": "BRAND ASSOCIATION MATRIX", "subtitle": "Which brand best fits each description?", "row_labels": ["Best quality", "Best value", "Most innovative", "Most trustworthy", "Most stylish", "Would recommend"], "col_labels": ["Competitor A", "Competitor B", "Competitor C", f"{bn}", "Competitor D"], "values": [[42, 18, 22, 20, 12], [12, 35, 28, 38, 15], [38, 10, 15, 22, 28], [35, 42, 38, 18, 12], [40, 10, 12, 15, 35], [38, 22, 25, 28, 15]]},
         ],
         "verbatim_quotes": [
-            {
-                "theme": "Comfort & Durability",
-                "quotes": [
-                    "I need the right kind of comfort to last all shift",
-                    "They don't last long, not durable",
-                    "The material changes over time washing them",
-                ],
-            },
-            {
-                "theme": "Fit & Sizing",
-                "quotes": [
-                    "Sizing doesn't always fit — I have to get medium bottoms and large tops",
-                    "I wish they products were more durable with colors lasting longer",
-                    "The drawstring tie on most pants is unusable",
-                ],
-            },
-            {
-                "theme": "Value & Price",
-                "quotes": [
-                    "I think that they should be more affordable regardless of quality",
-                    "The cost is a bit high for the quality",
-                    "Don't mind paying more for a durable, well-designed product that lasts",
-                ],
-            },
+            {"theme": "Quality & Performance", "quotes": [f"I need {bn} products that actually deliver on their promises", "Quality has gone up — this brand is getting serious", "Performs well but the brand doesn't match the product quality"]},
+            {"theme": "Value & Price", "quotes": ["Price is fair for what you get", "Would pay more if the brand felt more premium", "Great value compared to the big names"]},
+            {"theme": "Design & Experience", "quotes": ["Love the design but wish there were more options", "The unboxing experience could be better", "Functional but not exciting — needs more personality"]},
         ],
         "segments": [
             {
-                "name": "Endurance First",
-                "tagline": "I want products that perform as hard as I do",
-                "size_pct": 27,
-                "narrative": (
-                    f"Meet the Endurance First buyer: an active professional who puts their gear through daily heavy use "
-                    "across demanding environments, where every product is tested by constant activity, exposure, "
-                    "and repeated use. This segment (73% under 45, 36% household income over $100K) views products as "
-                    "essential performance equipment — not accessories, not fashion. They spend the most annually ($393 median) "
-                    "and buy every 2-3 months, driven by replacement cycles rather than impulse. What matters: durability that "
-                    "survives heavy daily use, quality that doesn't degrade, and performance that holds up over time. "
-                    "They research heavily on Amazon (27% default to Amazon for speed and reviews) and are willing to pay more — "
-                    "58% strongly agree they'd pay more for products that deliver. Their frustration: too many brands promise "
-                    "performance but can't survive the reality of demanding daily use."
-                ),
-                "demographics": {
-                    "primary_role": "Active professional / Daily power user",
-                    "age_skew": "73% under 45 — predominantly Millennial with significant Gen X presence",
-                    "income": "36% household income over $100K — highest earning segment",
-                    "gender_split": "65% female, 35% male",
-                },
-                "shopping_behavior": {
-                    "annual_spend": "$393 median — highest of all segments",
-                    "primary_channel": "Amazon (27%) and brand websites (20%) — product-dependent shoppers (38%)",
-                    "purchase_frequency": "71% buy every 2-3 months or more — highest frequency",
-                    "brand_loyalty": "Medium — loyal to performance, not brand name. Will switch if quality drops.",
-                },
-                "top_needs": ["Longer-lasting durability (51%)", "Better fabric performance (49%)", "More consistent fit (40%)"],
-                "pain_points": ["Inconsistent sizing between brands (35%)", "Products lose shape over time (29%)", "Insufficient pockets (24%)"],
-                "what_premium_means": "Evidence of superior materials/technology (42%), strong brand reputation (27%), and expert endorsements (24%). Premium = proof of performance.",
-                "lifestyle_signals": [
-                    {"category": "Social Media", "detail": "78% use YouTube more than any other social media platform"},
-                    {"category": "Music Preference", "detail": "45% like Rock music with 41% who like Hip-Hop/Rap"},
-                    {"category": "Wishlist", "detail": "Better fit & sizing as well as fabric quality & durability"},
-                ],
+                "name": "Performance Seeker",
+                "tagline": "I want the best-performing product, period",
+                "size_pct": 28,
+                "narrative": f"The Performance Seeker prioritizes functional excellence above all else. They research extensively, compare specifications, and are willing to pay a premium for products that demonstrably outperform alternatives. They are {bn}'s most valuable potential advocates — if the product wins them, their word-of-mouth sets the category standard.",
+                "demographics": {"primary_role": "Demanding power user", "age_skew": "65% under 45 — Millennial-heavy", "income": "35% household income over $100K", "gender_split": "55% female, 45% male"},
+                "shopping_behavior": {"annual_spend": "Highest of all segments", "primary_channel": "Amazon + brand DTC", "purchase_frequency": "Most frequent buyers", "brand_loyalty": "Loyal to performance, not logos"},
+                "top_needs": ["Superior core performance", "Durability / longevity", "Consistent quality"],
+                "pain_points": ["Inconsistent quality across purchases", "Products that don't match marketing claims", "Lack of detailed product information"],
+                "what_premium_means": "Proof of superior materials and engineering. Premium = evidence of performance.",
+                "lifestyle_signals": [{"category": "Research", "detail": "Heavy pre-purchase researcher — reads reviews, watches comparisons"}, {"category": "Advocacy", "detail": "Recommends products they trust to friends and online communities"}],
             },
             {
-                "name": "Fit Focused",
-                "tagline": "I want products that look as good as they feel",
-                "size_pct": 25,
-                "narrative": (
-                    "Meet the Fit Focused buyer: a young professional in her late 20s to early 30s, scrolling "
-                    "through products on her phone during breaks, looking for that perfect combination of quality "
-                    "and personal style. This segment (45% under 45, primarily Millennial) cares deeply about how products look "
-                    "AND feel — they want modern silhouettes, flattering cuts, and colors that express personality while "
-                    "maintaining professionalism. At $245 median annual spend, they're price-conscious but willing to invest "
-                    "in the right piece. Their biggest frustration: length issues (41%) and inconsistent sizing (25%) turn "
-                    "online shopping into a gamble. They want longer-lasting durability (75%) and better fabric performance (45%), "
-                    "but they won't sacrifice fit for function. If a brand can solve the sizing problem AND deliver on style, "
-                    "this segment becomes fiercely loyal."
-                ),
-                "demographics": {
-                    "primary_role": "Young professional / Style-conscious buyer",
-                    "age_skew": "45% under 45 — more evenly distributed across generations",
-                    "income": "31% household income over $100K",
-                    "gender_split": "70% female, 30% male",
-                },
-                "shopping_behavior": {
-                    "annual_spend": "$245 median — lowest of active segments",
-                    "primary_channel": "Amazon (33%) but also brand websites (16%) and value-seeking (25%)",
-                    "purchase_frequency": "51% buy every 2-3 months or less — more deliberate purchases",
-                    "brand_loyalty": "High once they find the right fit — switching cost is the hassle of re-sizing",
-                },
-                "top_needs": ["All-day comfort (57%)", "Durability after repeated washing (55%)", "Stretch and flexibility (33%)"],
-                "pain_points": ["Length issues — too short or too long (41%)", "Insufficient pocket space (25%)", "Inconsistent sizing between brands (25%)"],
-                "what_premium_means": "High-end modern design with flattering cuts (31%), superior fabric technology (41%), and a dedicated website beyond Amazon (24%). Premium = looking professional AND feeling good.",
-                "lifestyle_signals": [
-                    {"category": "Social Media", "detail": "YouTube is the dominant platform with strong Instagram usage"},
-                    {"category": "Style Identity", "detail": "Values modern, flattering silhouettes that maintain professionalism"},
-                    {"category": "Wishlist", "detail": "Better fit & sizing is the #1 priority, followed by fabric quality"},
-                ],
+                "name": "Style-Driven",
+                "tagline": "I want products that express who I am",
+                "size_pct": 24,
+                "narrative": f"The Style-Driven buyer sees purchases in this category as a form of self-expression. Design, aesthetics, and brand image matter as much as function. They follow trends, engage with brands on social media, and are drawn to products that feel curated and intentional.",
+                "demographics": {"primary_role": "Trend-aware consumer", "age_skew": "55% under 35 — Gen Z and young Millennial", "income": "Mixed income levels", "gender_split": "60% female, 40% male"},
+                "shopping_behavior": {"annual_spend": "Mid-range", "primary_channel": "Instagram/TikTok discovery → DTC or Amazon", "purchase_frequency": "Moderate — driven by new releases and trends", "brand_loyalty": "Moderate — follows brands with strong visual identity"},
+                "top_needs": ["Modern design / aesthetics", "Color and style variety", "Brand with personality"],
+                "pain_points": ["Limited color/style options", "Brands that feel generic or outdated", "Poor social media / community presence"],
+                "what_premium_means": "Visual identity + brand story. Premium = a brand worth being seen with.",
+                "lifestyle_signals": [{"category": "Social Media", "detail": "Instagram and TikTok-first — discovers products through content"}, {"category": "Identity", "detail": "Products are part of personal brand expression"}],
             },
             {
-                "name": "Value Hunter",
-                "tagline": "I want the best quality I can get for the price",
-                "size_pct": 21,
-                "narrative": (
-                    "Meet the Value Hunter: a savvy shopper with her shopping cart open, calculator in hand, comparing "
-                    "prices across three websites. She's not cheap, she's strategic. This segment (58% Millennial, split between "
-                    "married and single) earns mostly upper-middle income (51%) with 30% low-middle. At $294 spent annually, they "
-                    "demand the best quality for every dollar. They shop Amazon (63%), specialty uniform stores (50%), and brand "
-                    "websites (44%) hunting for deals. 'Premium' must prove itself: superior fabric technology (40%) and a "
-                    "professional brand experience beyond Amazon (30%). Their biggest headache: inconsistent sizing (40%) turns "
-                    "online shopping into a gamble. They want brands to deliver fair value and stop forcing them to choose "
-                    "between budget and products that actually work."
-                ),
-                "demographics": {
-                    "primary_role": "Value-conscious professional (44%), Budget-aware buyer (28%)",
-                    "age_skew": "58% Millennial, 23% Gen X — core working-age",
-                    "income": "51% upper-middle income, 30% low-middle",
-                    "gender_split": "67% female, 33% male",
-                },
-                "shopping_behavior": {
-                    "annual_spend": "$294 median",
-                    "primary_channel": "Amazon (63%) and specialty stores (50%) — comparison shoppers (37% choose best value)",
-                    "purchase_frequency": "63% buy every 2-3 months or more",
-                    "brand_loyalty": "Low — loyalty goes to value, not brand name. Will switch for a better deal.",
-                },
-                "top_needs": ["All-day comfort (72%)", "Stretch and flexibility (44%)", "Durability after repeated washing (35%)"],
-                "pain_points": ["Inconsistent sizing between brands (40%)", "Products lose shape over time (26%)", "Tightness in hips or thighs (26%)"],
-                "what_premium_means": "Evidence of superior fabric technology (40%), a dedicated website with professional brand experience beyond Amazon (30%), higher pricing that signals quality (26%). Premium = proven performance at fair price.",
-                "lifestyle_signals": [
-                    {"category": "Social Media", "detail": "88% use Facebook more than any other social media platform"},
-                    {"category": "Music Preference", "detail": "53% prefer Hip-Hop/Rap with 51% who like R&B/Soul"},
-                    {"category": "Wishlist", "detail": "Better price / affordability and better fit & sizing"},
-                ],
+                "name": "Value Optimizer",
+                "tagline": "I want the best I can get for what I spend",
+                "size_pct": 22,
+                "narrative": f"The Value Optimizer is strategic, not cheap. They compare extensively, hunt deals, and demand quality-per-dollar. They'll pay more for proven value but resist premium pricing without clear justification.",
+                "demographics": {"primary_role": "Comparison shopper", "age_skew": "Broadly distributed — 40% Millennial, 30% Gen X", "income": "Predominantly middle income", "gender_split": "52% female, 48% male"},
+                "shopping_behavior": {"annual_spend": "Below average", "primary_channel": "Amazon + price comparison sites", "purchase_frequency": "Deliberate — buys on need or deal", "brand_loyalty": "Low — loyal to value, not brand"},
+                "top_needs": ["Fair price for quality", "Durability (cost per use)", "Easy returns"],
+                "pain_points": ["Paying premium for marginal improvement", "Hidden costs or misleading claims", "Products that don't last"],
+                "what_premium_means": "Measurable quality difference that justifies the price gap. Premium = provable ROI.",
+                "lifestyle_signals": [{"category": "Shopping", "detail": "Uses price tracking tools and waits for deals"}, {"category": "Reviews", "detail": "Trusts verified purchase reviews over influencer content"}],
             },
             {
-                "name": "Polished Pro",
-                "tagline": "I want products that make me look polished and confident",
+                "name": "Loyalist",
+                "tagline": "I found what works — don't make me switch",
                 "size_pct": 18,
-                "narrative": (
-                    "Meet the Polished Pro: a discerning professional curating her products before heading out, ensuring every detail projects "
-                    "confidence. Appearance isn't vanity, it's personal brand. This segment (53% Millennial, 64% married) "
-                    "is the highest earner with 47% high income, 31% upper-middle. At $294 spent annually, they invest in products "
-                    "that look as premium as they are. The most discerning segment (42% frequent buyers, 19% brand loyalists, "
-                    "14% early adopters). Image-conscious and quality-driven: Amazon (64%), specialty stores (61%), Walmart (47%). "
-                    "'Premium' means superior fabric technology (39%) plus high-end, modern design with flattering cuts (36%). "
-                    "81% use Instagram more than any other segment — they're visually engaged and style-aware. They'll pay premium "
-                    "but only if products deliver both professionalism and performance."
-                ),
-                "demographics": {
-                    "primary_role": "Frequent buyer (42%), Brand loyalist (19%), Early adopter (14%)",
-                    "age_skew": "53% Millennial, 25% Gen X, 17% Gen Z",
-                    "income": "47% high income, 31% upper-middle — highest income segment",
-                    "gender_split": "69% female, 31% male",
-                },
-                "shopping_behavior": {
-                    "annual_spend": "$294 median",
-                    "primary_channel": "Amazon (64%) and specialty stores (61%), brand websites (33%) — highest DTC affinity",
-                    "purchase_frequency": "61% buy every 2-3 months or more",
-                    "brand_loyalty": "High — invest in brands that reflect their professional image. Highest brand awareness overall.",
-                },
-                "top_needs": ["All-day comfort (50%)", "Stretch and flexibility (50%)", "Durability after repeated washing (39%)"],
-                "pain_points": ["Inconsistent sizing between brands (40%)", "Products lose shape over time (26%)", "Tightness in hips or thighs (26%)"],
-                "what_premium_means": "Superior fabric technology (39%), high-end modern design with flattering cuts (36%), dedicated website with professional brand experience (31%), sustainable materials (33% — highest of any segment). Premium = looking sharp AND performing well.",
-                "lifestyle_signals": [
-                    {"category": "Social Media", "detail": "81% use Instagram more than any other segment — visually engaged and style-aware"},
-                    {"category": "Style Identity", "detail": "Professional, polished appearance is central to identity"},
-                    {"category": "Wishlist", "detail": "Better fit & sizing as well as fabric quality & durability"},
-                ],
+                "narrative": f"The Loyalist has found their go-to brand and sticks with it. Switching is a hassle they'd rather avoid. They value consistency, reliability, and a brand relationship built on repeated positive experiences.",
+                "demographics": {"primary_role": "Repeat buyer / habitual purchaser", "age_skew": "Older skew — 45% Gen X and Boomer", "income": "Upper-middle to high income", "gender_split": "50% female, 50% male"},
+                "shopping_behavior": {"annual_spend": "Moderate but consistent", "primary_channel": "Brand DTC + auto-replenish", "purchase_frequency": "Regular cycle — predictable", "brand_loyalty": "Very high — switching cost is emotional, not financial"},
+                "top_needs": ["Consistent quality across purchases", "Reliable availability", "Brand they trust"],
+                "pain_points": ["Product changes without warning", "Discontinuation of favorites", "Declining quality over time"],
+                "what_premium_means": "Trusted brand with consistent track record. Premium = reliability you don't have to think about.",
+                "lifestyle_signals": [{"category": "Advocacy", "detail": "Strong word-of-mouth — recommends their brand to everyone"}, {"category": "Resistance", "detail": "Skeptical of new brands — needs strong reason to try"}],
             },
             {
-                "name": "Basic Buyer",
-                "tagline": "I just need products that work",
+                "name": "Minimal Buyer",
+                "tagline": "I just need something that works",
                 "size_pct": 8,
-                "narrative": (
-                    "Meet the Basic Buyer: a consumer who views products as a necessary purchase, not a category worth "
-                    "investing thought or money into. This smallest segment treats products as purely functional — whatever is cheapest, "
-                    "most available, and good enough will do. They buy infrequently, spend the least, and have minimal brand awareness "
-                    "or loyalty. They are not a viable target for any brand seeking to build premium positioning, but they represent "
-                    "the floor of the market and help define what 'commodity products' looks like — the position every brand should "
-                    "want to avoid."
-                ),
-                "demographics": {
-                    "primary_role": "Mixed — various casual/infrequent buyers",
-                    "age_skew": "Broadly distributed across generations",
-                    "income": "Predominantly low to low-middle income",
-                    "gender_split": "60% female, 40% male",
-                },
-                "shopping_behavior": {
-                    "annual_spend": "Under $150 median — lowest of all segments",
-                    "primary_channel": "Walmart and employer-provided — convenience-driven",
-                    "purchase_frequency": "Only when items wear out",
-                    "brand_loyalty": "None — purely price and availability driven",
-                },
-                "top_needs": ["Low price", "Availability", "Basic comfort"],
-                "pain_points": ["Having to buy products at all", "Price of quality products"],
-                "what_premium_means": "Not relevant — this segment does not engage with premium concepts",
+                "narrative": f"The Minimal Buyer views this category as purely functional. They spend the least, research the least, and have no brand loyalty. They represent the commodity floor of the market.",
+                "demographics": {"primary_role": "Infrequent / convenience buyer", "age_skew": "Broadly distributed", "income": "Lower income", "gender_split": "50% female, 50% male"},
+                "shopping_behavior": {"annual_spend": "Lowest of all segments", "primary_channel": "Whatever is most convenient", "purchase_frequency": "Only when needed", "brand_loyalty": "None"},
+                "top_needs": ["Low price", "Availability", "Good enough quality"],
+                "pain_points": ["Having to spend money in this category at all"],
+                "what_premium_means": "Not relevant to this segment",
                 "lifestyle_signals": [],
             },
         ],
         "target_recommendation": {
-            "primary_segment": "Endurance First",
-            "title": "PRIMARY TARGET: ENDURANCE FIRST PROFESSIONALS",
+            "primary_segment": "Performance Seeker",
+            "title": "PRIMARY TARGET: PERFORMANCE SEEKERS",
             "rationale_bullets": [
-                f"Defines quality: If products perform for the most demanding shifts, they earn trust across the market. Endurance First professionals set the performance standard for the category — winning them validates the product for everyone else.",
-                f"Highest value: Spend $393 annually (highest of all segments) and 58% strongly agree they'd pay more for products that deliver. They are willing to invest in proven performance.",
-                f"Strong product fit: Their unmet needs — durability, fabric performance, consistent fit — align directly with {bn}'s execution strengths. The product already delivers what they want; the brand just needs to communicate it.",
-                f"Natural channel fit: Already research and shop heavily on Amazon (27% default channel), where {bn} has established traction. The path to reach them is already built.",
+                f"Defines category standards: Performance Seekers set the quality bar. Winning them validates {bn} for every other segment.",
+                f"Highest value: Spend the most annually and willing to pay premium for proven performance.",
+                f"Strong product fit: Their unmet needs align with {bn}'s execution strengths — the product delivers, the brand just needs to communicate it.",
+                f"Natural channel fit: Already active in {bn}'s primary sales channels.",
             ],
-            "insight": "For this segment, 'premium' means proof that the product works — not image or prestige. This is a credibility path, not a lifestyle play.",
-            "enables": [
-                "A clear decision filter for product performance and quality standards",
-                f"A credible path to brand elevation without lifestyle positioning or premium pricing",
-                "Natural spillover to adjacent segments who value durability and fit",
-            ],
-            "does_not_decide": [
-                "Final brand positioning or tone",
-                f"The future role of {bn}'s current brand name versus a new brand",
-                "Pricing architecture or promotional strategy",
-            ],
+            "insight": f"For Performance Seekers, 'premium' means proof of superior execution — not image or lifestyle. This is a credibility path for {bn}.",
+            "enables": ["A clear decision filter for product and quality standards", f"A credible path to brand elevation for {bn}", "Natural spillover to adjacent segments"],
+            "does_not_decide": ["Final brand positioning or tone", "Pricing architecture", "Channel strategy"],
         },
         "deprioritized_segments": [
-            {"name": "Fit Focused", "size_pct": 25,
-             "reason": "Comfort-first, lower spend. Strong secondary target but not the right anchor for premium positioning."},
-            {"name": "Value Hunter", "size_pct": 21,
-             "reason": "Price-driven, promotion-sensitive. Competing here risks compressing margins and weakening brand perception."},
-            {"name": "Polished Pro", "size_pct": 18,
-             "reason": "Style-first, high expectations. Requires visual brand assets not yet built — strong future target after brand elevation."},
+            {"name": "Style-Driven", "size_pct": 24, "reason": "Requires strong visual brand assets not yet built — strong future target after brand elevation."},
+            {"name": "Value Optimizer", "size_pct": 22, "reason": "Price-driven positioning risks margin compression and brand dilution."},
+            {"name": "Loyalist", "size_pct": 18, "reason": "Already committed to incumbents — high switching cost makes acquisition expensive."},
         ],
         "competitive_fares": {
-            "brand_strengths": "Competitor A → Innovation & Premium, Competitor B → Heritage & Trust, Competitor C → Durability, Competitor D → Authority",
-            "category_compromise": "The category forces buyers to choose between affordable performance and premium brand experience. No brand combines both.",
-            "strategic_opportunity": f"A brand that delivers proven performance at accessible prices with a credible, modern identity — {bn}'s execution strengths point directly here.",
-            "strategic_question": f"What would it look like to build a brand that earns the trust of the most demanding professionals — and grows from there?",
+            "brand_strengths": "Competitor A → Category leadership, Competitor B → Heritage & Trust, Competitor C → Innovation, Competitor D → Value",
+            "category_compromise": "The category forces buyers to choose between performance excellence and accessible pricing. No brand owns both.",
+            "strategic_opportunity": f"{bn}'s execution strengths position it to bridge this gap — proven performance at accessible prices with a credible modern identity.",
+            "strategic_question": f"What would it look like to build a brand that earns the trust of the most demanding consumers — and grows from there?",
         },
         "consumer_summary": (
-            "Endurance First professionals spend the most and define what quality means in products. "
-            f"Their needs align with {bn}'s product strengths and Amazon presence. "
+            f"Performance Seekers define quality standards in this category and spend the most. "
+            f"Their needs align directly with {bn}'s product strengths. "
             "Next: define a brand position that resonates with performance-first buyers."
         ),
         "key_insights": [
             {
                 "title": "KEY CONSUMER INSIGHTS",
                 "bullets": [
-                    "Comfort is the #1 driver (50-72%) across all segments. Functional excellence is the entry ticket.",
-                    "Amazon dominates (59-64%) but DTC shows traction (16-33%). Consumers are open to buying direct.",
-                    "88% would pay more for products that deliver. Willingness exists — a clear brand reason is missing.",
+                    "Core performance is the #1 driver across all segments. Functional excellence is the entry ticket.",
+                    "Amazon dominates discovery and purchase, but DTC shows growing traction among high-value segments.",
+                    "Consumers will pay more for quality — but they need a clear brand reason to believe.",
                 ],
-                "insight": "Consumers will pay for proven performance — they just need a reason to believe.",
+                "insight": "The market rewards brands that prove performance first and build identity second.",
             },
         ],
     }
@@ -2015,18 +2628,16 @@ def _mock_analysis(brand_name: str, phase: str = "full") -> dict:
     # Add summary & next steps for full report
     result["summary_and_next_steps"] = {
         "capabilities_column": (
-            f"{bn} is an execution-driven brand with competitive products and strong Amazon performance, "
-            "now facing the need to clarify its naming and brand structure — including the role of its "
-            "current brand name — to support long-term growth."
+            f"{bn} is an execution-driven brand with competitive products and growing market presence, "
+            "now facing the need to define a clear brand identity to support long-term growth."
         ),
         "competition_column": (
-            "The products market is well-established, with leading brands succeeding by owning a clear and "
-            "focused role — such as lifestyle identity, innovation leadership, durability, value, style, or "
-            "comfort — rather than trying to compete across everything at once."
+            "The market is well-established, with leading brands succeeding by owning a clear and "
+            "focused role rather than trying to compete across everything at once."
         ),
         "consumer_column": (
-            "Endurance First professionals spend the most, set the highest performance standards, and define "
-            "what quality means in products — making them the most valuable and influential segment in the market."
+            "Performance Seekers spend the most, set the highest standards, and define "
+            "what quality means — making them the most valuable segment to win first."
         ),
         "closing_insight": (
             f"Building on these insights, we will define a clear and differentiated brand position for {bn} — "
