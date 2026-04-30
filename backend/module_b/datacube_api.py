@@ -367,6 +367,90 @@ async def import_csv(file: UploadFile = File(...)):
     return {"imported": imported, "errors": errors}
 
 
+# ── Platform Import ─────────────────────────────────────────
+
+
+@router.post("/import/{platform}")
+async def import_platform_data(
+    platform: str,
+    brand: str = Query(...),
+    file: UploadFile = File(...),
+):
+    """Import from ad platform CSV: google_ads / meta_ads / amazon_ads."""
+    from module_b.connectors.google_ads import parse_google_ads_csv
+    from module_b.connectors.meta_ads import parse_meta_ads_csv
+    from module_b.connectors.amazon_ads import parse_amazon_ads_csv
+
+    parsers = {
+        "google_ads": parse_google_ads_csv,
+        "meta_ads": parse_meta_ads_csv,
+        "amazon_ads": parse_amazon_ads_csv,
+    }
+
+    parser = parsers.get(platform)
+    if not parser:
+        raise HTTPException(400, f"Unknown platform: {platform}. Supported: {list(parsers.keys())}")
+
+    content = (await file.read()).decode("utf-8-sig")
+    parsed = parser(content, brand)
+
+    db = _get_db()
+    imported = 0
+    errors: list[str] = []
+
+    for i, c in enumerate(parsed):
+        try:
+            cid = str(uuid.uuid4())[:12]
+            campaign = Campaign(
+                id=cid,
+                brand_name=c["brand_name"],
+                campaign_name=c["campaign_name"],
+                campaign_type=c.get("campaign_type", "paid_media"),
+                status="completed",
+                notes=f"Imported from {platform}",
+                created_at=_now(),
+            )
+            db.add(campaign)
+
+            ctx = c.get("context", {})
+            db.add(ContextTag(
+                campaign_id=cid,
+                channel=ctx.get("channel", platform),
+                funnel_stage=ctx.get("funnel_stage", ""),
+            ))
+            db.add(AudienceTag(campaign_id=cid))
+            db.add(ContentTag(campaign_id=cid))
+
+            perf = c.get("performance", {})
+            impressions = perf.get("impressions", 0)
+            clicks = perf.get("clicks", 0)
+            conversions = perf.get("conversions", 0)
+            revenue = perf.get("revenue", 0)
+            cost = perf.get("cost", 0)
+
+            db.add(Performance(
+                campaign_id=cid,
+                impressions=impressions,
+                clicks=clicks,
+                engagement_rate=perf.get("engagement_rate", 0),
+                conversions=conversions,
+                conversion_rate=round(conversions / clicks * 100, 2) if clicks > 0 else 0,
+                revenue=revenue,
+                cost=cost,
+                roas=perf.get("roas", 0),
+                cpa=round(cost / conversions, 2) if conversions > 0 else 0,
+                cpc=perf.get("cpc", 0),
+                cpm=perf.get("cpm", 0),
+            ))
+            imported += 1
+        except Exception as e:
+            errors.append(f"Row {i + 1}: {e}")
+
+    db.commit()
+    db.close()
+    return {"platform": platform, "imported": imported, "errors": errors}
+
+
 # ── Attribution ───────────────────────────────────────────
 
 

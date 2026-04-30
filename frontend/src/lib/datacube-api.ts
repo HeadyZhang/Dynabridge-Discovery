@@ -167,6 +167,20 @@ export async function dcImportCSV(file: File): Promise<{ imported: number; error
   return res.json();
 }
 
+export async function dcImportPlatform(
+  platform: string,
+  brand: string,
+  file: File,
+): Promise<{ platform: string; imported: number; errors: string[] }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(
+    `${API_BASE}/api/datacube/import/${platform}?brand=${encodeURIComponent(brand)}`,
+    { method: "POST", body: formData },
+  );
+  return res.json();
+}
+
 export async function dcGenerateInsights(brand: string): Promise<{ generated: number }> {
   const res = await fetch(`${API_BASE}/api/datacube/insights/generate?brand=${encodeURIComponent(brand)}`, {
     method: "POST",
