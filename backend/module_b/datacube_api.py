@@ -296,44 +296,55 @@ def add_performance(campaign_id: str, body: list = Body(...)):
 
 @router.post("/import/csv")
 async def import_csv(file: UploadFile = File(...)):
-    """Bulk import campaigns from CSV."""
+    """Bulk import campaigns from CSV.
+
+    Rows with the same campaign_name are grouped into one campaign with
+    multiple performance records (enabling time-series analysis like
+    creative fatigue detection).
+    """
     content = await file.read()
     reader = csv.DictReader(io.StringIO(content.decode("utf-8-sig")))
 
     db = _get_db()
     imported = 0
     errors: list[str] = []
+    campaign_ids: dict[str, str] = {}  # campaign_name → id
 
     for i, row in enumerate(reader):
         try:
-            cid = str(uuid.uuid4())[:12]
-            campaign = Campaign(
-                id=cid,
-                brand_name=row.get("brand", ""),
-                campaign_name=row.get("campaign_name", ""),
-                campaign_type=row.get("campaign_type", "paid_media"),
-                status="completed",
-                created_at=_now(),
-            )
-            db.add(campaign)
+            name = row.get("campaign_name", "")
+            cid = campaign_ids.get(name)
 
-            db.add(AudienceTag(
-                campaign_id=cid,
-                segment=row.get("audience_segment", ""),
-                geo_market=row.get("geo", ""),
-            ))
-            db.add(ContentTag(
-                campaign_id=cid,
-                theme=row.get("content_theme", ""),
-                format=row.get("content_format", ""),
-                message_type=row.get("message_type", ""),
-            ))
-            db.add(ContextTag(
-                campaign_id=cid,
-                channel=row.get("channel", ""),
-                funnel_stage=row.get("funnel_stage", ""),
-                geo=row.get("geo", ""),
-            ))
+            if cid is None:
+                cid = str(uuid.uuid4())[:12]
+                campaign_ids[name] = cid
+                campaign = Campaign(
+                    id=cid,
+                    brand_name=row.get("brand", ""),
+                    campaign_name=name,
+                    campaign_type=row.get("campaign_type", "paid_media"),
+                    status="completed",
+                    created_at=_now(),
+                )
+                db.add(campaign)
+
+                db.add(AudienceTag(
+                    campaign_id=cid,
+                    segment=row.get("audience_segment", ""),
+                    geo_market=row.get("geo", ""),
+                ))
+                db.add(ContentTag(
+                    campaign_id=cid,
+                    theme=row.get("content_theme", ""),
+                    format=row.get("content_format", ""),
+                    message_type=row.get("message_type", ""),
+                ))
+                db.add(ContextTag(
+                    campaign_id=cid,
+                    channel=row.get("channel", ""),
+                    funnel_stage=row.get("funnel_stage", ""),
+                    geo=row.get("geo", ""),
+                ))
 
             date_str = row.get("date", "")
             date_val = datetime.fromisoformat(date_str) if date_str else None
@@ -364,7 +375,7 @@ async def import_csv(file: UploadFile = File(...)):
 
     db.commit()
     db.close()
-    return {"imported": imported, "errors": errors}
+    return {"imported": imported, "campaigns_created": len(campaign_ids), "errors": errors}
 
 
 # ── Platform Import ─────────────────────────────────────────
