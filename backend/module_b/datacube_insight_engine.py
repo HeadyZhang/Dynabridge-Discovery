@@ -171,6 +171,161 @@ def _pattern_untested_combinations(data: list[dict]) -> list[dict]:
     return insights[:5]  # Limit to top 5 suggestions
 
 
+def _pattern_creative_fatigue(db, brand_name: str) -> list[dict]:
+    """Detect campaigns with declining engagement (creative fatigue).
+
+    Fires when a campaign's engagement_rate drops >15% from first to last
+    data point across 2+ performance records.
+    """
+    campaigns = db.query(Campaign).filter(Campaign.brand_name == brand_name).all()
+    insights = []
+
+    for campaign in campaigns:
+        perfs = sorted(campaign.performances, key=lambda p: (p.date or _now()))
+        if len(perfs) < 2:
+            continue
+
+        first_er = perfs[0].engagement_rate or 0
+        last_er = perfs[-1].engagement_rate or 0
+
+        if first_er > 0 and last_er < first_er * 0.85:
+            decline_pct = round((1 - last_er / first_er) * 100)
+
+            con = campaign.content_tags[0] if campaign.content_tags else None
+            ctx = campaign.context_tags[0] if campaign.context_tags else None
+
+            insights.append({
+                "pattern_type": "creative_fatigue",
+                "finding": (
+                    f"Campaign '{campaign.campaign_name}' engagement dropped {decline_pct}% "
+                    f"over {len(perfs)} data points. Content may need refresh."
+                ),
+                "evidence": json.dumps({
+                    "campaign_id": campaign.id,
+                    "decline_pct": decline_pct,
+                    "data_points": len(perfs),
+                    "first_er": first_er,
+                    "last_er": last_er,
+                }),
+                "confidence": "high" if decline_pct > 30 else "medium",
+                "action_type": "stop",
+                "action_recommendation": (
+                    f"Pause or refresh creative for '{campaign.campaign_name}'. "
+                    f"Consider new angle for {con.theme if con else 'this'} content "
+                    f"on {ctx.channel if ctx else 'this channel'}."
+                ),
+                "content_theme": con.theme if con else None,
+                "channel": ctx.channel if ctx else None,
+            })
+
+    return insights
+
+
+def _pattern_geo_variance(data: list[dict]) -> list[dict]:
+    """Detect same content performing very differently across geos.
+
+    Fires when the best geo's ROAS is >1.5x the worst geo's for the same
+    content theme.
+    """
+    theme_geo: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+
+    for d in data:
+        if d["content_theme"] and d["geo"] and d["roas"] > 0:
+            theme_geo[d["content_theme"]][d["geo"]].append(d["roas"])
+
+    insights = []
+    for theme, geo_data in theme_geo.items():
+        if len(geo_data) < 2:
+            continue
+
+        geo_avg = {
+            geo: sum(vals) / len(vals)
+            for geo, vals in geo_data.items()
+        }
+        best_geo = max(geo_avg, key=lambda g: geo_avg[g])
+        worst_geo = min(geo_avg, key=lambda g: geo_avg[g])
+
+        if geo_avg[worst_geo] > 0:
+            ratio = geo_avg[best_geo] / geo_avg[worst_geo]
+            if ratio > 1.5:
+                insights.append({
+                    "pattern_type": "geo_variance",
+                    "finding": (
+                        f"'{theme.replace('_',' ').title()}' content performs {ratio:.1f}x better "
+                        f"in {best_geo} (ROAS {geo_avg[best_geo]:.1f}x) vs "
+                        f"{worst_geo} (ROAS {geo_avg[worst_geo]:.1f}x)."
+                    ),
+                    "evidence": json.dumps({
+                        "geo_performance": {g: round(v, 2) for g, v in geo_avg.items()},
+                    }),
+                    "confidence": "medium",
+                    "action_type": "scale",
+                    "action_recommendation": (
+                        f"Increase '{theme.replace('_',' ')}' budget in {best_geo}, "
+                        f"reduce or test alternatives in {worst_geo}."
+                    ),
+                    "content_theme": theme,
+                })
+
+    return insights
+
+
+def _pattern_temporal_trends(db, brand_name: str) -> list[dict]:
+    """Detect channels/content with ROAS trending up or down over time.
+
+    Groups performance by channel x month, fires when the last month's
+    avg ROAS differs >20% from the first month.
+    """
+    campaigns = db.query(Campaign).filter(Campaign.brand_name == brand_name).all()
+    channel_monthly: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+
+    for c in campaigns:
+        ctx = c.context_tags[0] if c.context_tags else None
+        if not ctx:
+            continue
+        for p in c.performances:
+            if p.date and (p.roas or 0) > 0:
+                month_key = p.date.strftime("%Y-%m")
+                channel_monthly[ctx.channel][month_key].append(p.roas)
+
+    insights = []
+    for channel, monthly_data in channel_monthly.items():
+        if len(monthly_data) < 2:
+            continue
+
+        sorted_months = sorted(monthly_data.keys())
+        monthly_avg = [
+            sum(monthly_data[m]) / len(monthly_data[m])
+            for m in sorted_months
+        ]
+
+        if monthly_avg[0] > 0:
+            trend = (monthly_avg[-1] - monthly_avg[0]) / monthly_avg[0]
+            if abs(trend) > 0.2:
+                direction = "improving" if trend > 0 else "declining"
+                insights.append({
+                    "pattern_type": "temporal_trend",
+                    "finding": (
+                        f"{channel} ROAS is {direction} "
+                        f"({trend:+.0%} from {sorted_months[0]} to {sorted_months[-1]})."
+                    ),
+                    "evidence": json.dumps({
+                        "monthly_roas": {
+                            m: round(a, 2) for m, a in zip(sorted_months, monthly_avg)
+                        },
+                    }),
+                    "confidence": "medium" if len(sorted_months) >= 3 else "low",
+                    "action_type": "scale" if trend > 0 else "test",
+                    "action_recommendation": (
+                        f"{'Increase' if trend > 0 else 'Review and test alternatives for'} "
+                        f"{channel} investment."
+                    ),
+                    "channel": channel,
+                })
+
+    return insights
+
+
 def _generate_with_claude(brand_name: str, data: list[dict], stat_insights: list[dict]) -> list[dict]:
     """Use Claude to enhance and add narrative to statistical insights."""
     try:
@@ -228,6 +383,9 @@ async def generate_insights(brand_name: str) -> list[dict]:
     all_insights.extend(_pattern_content_by_segment(data))
     all_insights.extend(_pattern_channel_efficiency(data))
     all_insights.extend(_pattern_untested_combinations(data))
+    all_insights.extend(_pattern_creative_fatigue(db, brand_name))
+    all_insights.extend(_pattern_geo_variance(data))
+    all_insights.extend(_pattern_temporal_trends(db, brand_name))
 
     # AI-enhanced insights
     ai_insights = _generate_with_claude(brand_name, data, all_insights)
