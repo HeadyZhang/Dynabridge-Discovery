@@ -784,6 +784,114 @@ async def debrief_campaign(campaign_id: str):
     }
 
 
+# ── Unified Analysis ─────────────────────────────────────
+
+
+@router.get("/unified-analysis")
+def unified_analysis(
+    brand: Optional[str] = Query(None),
+    industry: Optional[str] = Query(None),
+    audience: Optional[str] = Query(None),
+    channel: Optional[str] = Query(None),
+):
+    """Unified view: Research insights + Performance data analyzed together.
+
+    Addresses Anthony's requirement: 'analyzed together instead of in silos'.
+    """
+    from module_b.models import ConsumerInsight, CaseProject
+
+    db = _get_db()
+
+    # 1. Performance data — aggregate by audience x content x channel
+    campaigns = db.query(Campaign).all()
+    if brand:
+        campaigns = [c for c in campaigns if c.brand_name == brand]
+
+    combos: dict[str, dict] = {}
+    for c in campaigns:
+        aud = c.audience_tags[0] if c.audience_tags else None
+        con = c.content_tags[0] if c.content_tags else None
+        ctx = c.context_tags[0] if c.context_tags else None
+
+        if not (aud and con and ctx and c.performances):
+            continue
+        if audience and aud.segment != audience:
+            continue
+        if channel and ctx.channel != channel:
+            continue
+
+        key = f"{aud.segment}|{con.theme}|{ctx.channel}"
+        if key not in combos:
+            combos[key] = {
+                "audience": aud.segment,
+                "content": con.theme,
+                "channel": ctx.channel,
+                "campaigns": 0,
+                "total_revenue": 0,
+                "total_cost": 0,
+                "total_impressions": 0,
+            }
+        combos[key]["campaigns"] += 1
+        combos[key]["total_revenue"] += sum(p.revenue for p in c.performances)
+        combos[key]["total_cost"] += sum(p.cost for p in c.performances)
+        combos[key]["total_impressions"] += sum(p.impressions for p in c.performances)
+
+    for v in combos.values():
+        v["avg_roas"] = round(v["total_revenue"] / v["total_cost"], 2) if v["total_cost"] > 0 else 0
+
+    ranked = sorted(combos.values(), key=lambda x: x["avg_roas"], reverse=True)
+
+    # 2. Research data — ConsumerInsight
+    insight_q = db.query(ConsumerInsight)
+    if industry:
+        insight_q = insight_q.filter(ConsumerInsight.industry == industry)
+    elif brand:
+        case_proj = db.query(CaseProject).filter(CaseProject.brand_name == brand).first()
+        if case_proj and case_proj.industry:
+            insight_q = insight_q.filter(ConsumerInsight.industry == case_proj.industry)
+
+    research = insight_q.limit(30).all()
+
+    # 3. Cross-validate: which research insights are backed by performance?
+    validated = []
+    for ins in research:
+        for combo in ranked[:5]:
+            seg = ins.target_segment or ""
+            if seg and seg.lower().replace(" ", "_") in combo["audience"].lower():
+                validated.append({
+                    "insight": ins.insight_text[:120],
+                    "insight_type": ins.insight_type,
+                    "validated_by": (
+                        f"{combo['audience']} x {combo['content']} x {combo['channel']} "
+                        f"(ROAS {combo['avg_roas']}x)"
+                    ),
+                })
+                break
+
+    db.close()
+    return {
+        "performance_ranking": ranked[:10],
+        "research_insights": [
+            {
+                "text": i.insight_text,
+                "text_en": getattr(i, "insight_text_en", None),
+                "type": i.insight_type,
+                "brand": i.brand_name,
+                "segment": i.target_segment,
+                "confidence": i.confidence,
+            }
+            for i in research
+        ],
+        "cross_validated": validated,
+        "summary": {
+            "total_combos_analyzed": len(combos),
+            "best_combo": ranked[0] if ranked else None,
+            "research_insights_count": len(research),
+            "cross_validated_count": len(validated),
+        },
+    }
+
+
 # ── Helpers ───────────────────────────────────────────────
 
 
