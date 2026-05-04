@@ -4,16 +4,17 @@ FullTextIndex: SQLite FTS5 virtual table for keyword search.
 VectorIndex: sentence-transformers embeddings + numpy cosine similarity.
 """
 import json
+import os
 import sqlite3
 import numpy as np
 from pathlib import Path
 from typing import Optional
 
-from config import BASE_DIR
+from config import BASE_DIR, DATA_DIR
 
-FTS_DB_PATH = BASE_DIR / "case_search.db"
-VECTOR_DB_PATH = BASE_DIR / "case_vectors.npz"
-VECTOR_META_PATH = BASE_DIR / "case_vectors_meta.json"
+FTS_DB_PATH = Path(os.getenv("FTS_DB_PATH", DATA_DIR / "case_search.db"))
+VECTOR_DB_PATH = Path(os.getenv("VECTOR_DB_PATH", DATA_DIR / "case_vectors.npz"))
+VECTOR_META_PATH = Path(os.getenv("VECTOR_META_PATH", DATA_DIR / "case_vectors_meta.json"))
 
 
 def _expand_search_query(q: str) -> str:

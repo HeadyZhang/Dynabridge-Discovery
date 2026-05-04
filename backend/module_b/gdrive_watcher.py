@@ -16,9 +16,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from config import DATA_DIR
 from module_b.auth import get_drive_service
 
-STATE_FILE = Path(__file__).parent.parent / "tasks" / "watcher_state.json"
+STATE_FILE = Path(os.getenv("WATCHER_STATE_FILE", DATA_DIR / "watcher_state.json"))
+DRIVE_DOWNLOAD_DIR = Path(os.getenv("DRIVE_DOWNLOAD_DIR", DATA_DIR / "drive_updates"))
 
 
 def _load_state() -> dict:
@@ -123,7 +125,7 @@ def sync_changes(changes: list[dict]) -> dict:
 
         try:
             # Download to tmp
-            save_path = Path("/tmp/drive_updates") / name
+            save_path = DRIVE_DOWNLOAD_DIR / name
             save_path.parent.mkdir(parents=True, exist_ok=True)
             client.download_file(change["file_id"], save_path, change["mime_type"])
             processed += 1

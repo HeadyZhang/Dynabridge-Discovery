@@ -7,15 +7,18 @@ load_dotenv(Path(__file__).parent / ".env")
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
+# DATA_DIR holds runtime-mutable artifacts (DBs, vectors, watcher state, drive
+# downloads). On Railway, mount a Volume here via DATA_DIR=/data.
+DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR))
 TEMPLATE_DIR = BASE_DIR / "templates"
-UPLOAD_DIR = BASE_DIR / "uploads"
-OUTPUT_DIR = BASE_DIR / "output"
-PREVIEW_DIR = BASE_DIR / "previews"
-DB_PATH = BASE_DIR / "dynabridge.db"
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", BASE_DIR / "uploads"))
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", BASE_DIR / "output"))
+PREVIEW_DIR = Path(os.getenv("PREVIEW_DIR", BASE_DIR / "previews"))
+DB_PATH = Path(os.getenv("DB_PATH", DATA_DIR / "dynabridge.db"))
 
 # Ensure dirs exist
-for d in [UPLOAD_DIR, OUTPUT_DIR, PREVIEW_DIR]:
-    d.mkdir(exist_ok=True)
+for d in [DATA_DIR, UPLOAD_DIR, OUTPUT_DIR, PREVIEW_DIR]:
+    d.mkdir(parents=True, exist_ok=True)
 
 # API Keys
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")

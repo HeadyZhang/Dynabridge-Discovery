@@ -1,0 +1,40 @@
+# Railway deployment config.
+#
+# Setup (one-time, in Railway dashboard):
+#   1. Create a Volume and mount it at /data on BOTH services below.
+#   2. Set service-level env on BOTH services:
+#        DATA_DIR=/data
+#        ANTHROPIC_API_KEY=...
+#        OPENAI_API_KEY=...
+#        REPLICATE_API_TOKEN=...
+#        GOOGLE_DRIVE_FOLDER_ID=...
+#        (plus whatever the Drive service-account JSON path expects)
+#   3. Seed /data with initial dynabridge.db / case_search.db / case_vectors.npz
+#      via `railway run` or `railway ssh`.
+#
+# Two services share this repo + Dockerfile:
+#   - web: long-running FastAPI server
+#   - drive-watcher: cron, every 5 min, polls Drive changes API and re-ingests
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "backend/Dockerfile"
+
+[[services]]
+name = "web"
+
+[services.deploy]
+startCommand = "python main.py"
+healthcheckPath = "/health"
+restartPolicyType = "ON_FAILURE"
+
+[[services]]
+name = "drive-watcher"
+
+[services.deploy]
+# Every 5 minutes. Adjust as needed; Drive changes.list is incremental
+# (uses persisted page_token in DATA_DIR/watcher_state.json), so polling
+# frequency only affects latency, not API quota.
+cronSchedule = "*/5 * * * *"
+startCommand = "python -m module_b.gdrive_watcher"
+restartPolicyType = "NEVER"
