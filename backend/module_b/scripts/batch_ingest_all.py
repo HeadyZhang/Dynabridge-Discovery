@@ -12,12 +12,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from config import DATA_DIR
 from module_b.auth import get_drive_service
 from module_b.gdrive import GDriveClient
 from module_b.ingest import ingest_case
 
-DOWNLOAD_BASE = Path("/tmp/cases")
-ALREADY_INGESTED_FILE = Path(__file__).parent.parent.parent / "tasks" / "ingested_cases.json"
+DOWNLOAD_BASE = Path(os.getenv("CASE_DOWNLOAD_BASE", DATA_DIR / "cases"))
+ALREADY_INGESTED_FILE = Path(os.getenv("INGESTED_CASES_FILE", DATA_DIR / "ingested_cases.json"))
 
 
 def load_ingested() -> dict:
