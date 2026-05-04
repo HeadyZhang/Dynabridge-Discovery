@@ -3,6 +3,9 @@ import asyncio
 from pathlib import Path
 from typing import Optional
 
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent / ".env")
+
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -1401,6 +1404,42 @@ def _project_dict(p: Project, include_slides=False, include_comments=False):
 
 def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+# ─── Module B: Knowledge Base routes ────────────────────────
+try:
+    from module_b.api import router as knowledge_router
+    app.include_router(knowledge_router)
+except ImportError:
+    pass  # Module B not installed
+
+try:
+    from module_b.datacube_api import router as datacube_router
+    app.include_router(datacube_router)
+except ImportError:
+    pass
+
+
+# ─── Module A → B Integration ───────────────────────────────
+
+@app.patch("/api/projects/{project_id}/approve")
+async def approve_project(project_id: int):
+    """Approve a project and sync to Module B knowledge base."""
+    with Session() as db:
+        project = db.query(Project).get(project_id)
+        if not project:
+            raise HTTPException(404, "Project not found")
+        project.status = ProjectStatus.APPROVED
+        db.commit()
+
+    # Sync to Module B knowledge base
+    try:
+        from module_b.integration import on_project_approved
+        integration_result = await on_project_approved(project_id)
+    except ImportError:
+        integration_result = {"status": "module_b_not_available"}
+
+    return {"approved": True, "integration": integration_result}
 
 
 if __name__ == "__main__":
