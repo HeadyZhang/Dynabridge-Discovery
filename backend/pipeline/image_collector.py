@@ -45,6 +45,7 @@ async def collect_images(
         _collect_from_ecommerce(img_dir, ecommerce_data),
         _collect_from_website_httpx(img_dir, brand_url, brand_name),
         _collect_via_web_search(img_dir, brand_name, category_keywords),
+        _collect_amazon_screenshots(img_dir, brand_name),
     ]
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -53,6 +54,7 @@ async def collect_images(
     product_imgs = results[1] if not isinstance(results[1], Exception) else []
     httpx_imgs = results[2] if not isinstance(results[2], Exception) else []
     search_imgs = results[3] if not isinstance(results[3], Exception) else []
+    amazon_imgs = results[4] if not isinstance(results[4], Exception) else []
 
     # Merge httpx brand images with Playwright brand images (deduplicate by path)
     seen = {p.name for p in brand_imgs}
@@ -61,7 +63,23 @@ async def collect_images(
             brand_imgs.append(p)
             seen.add(p.name)
 
+    # Merge Amazon images into product images
+    seen_product = {p.name for p in product_imgs}
+    for p in amazon_imgs:
+        if p.name not in seen_product:
+            product_imgs.append(p)
+            seen_product.add(p.name)
+
     lifestyle_imgs = search_imgs
+
+    # Vision-based relevance filter: remove images unrelated to the brand/product
+    all_before = brand_imgs + product_imgs + lifestyle_imgs
+    relevant = await _filter_relevant_images(all_before, brand_name, category_keywords)
+    if relevant is not None:
+        relevant_set = set(relevant)
+        brand_imgs = [p for p in brand_imgs if p in relevant_set]
+        product_imgs = [p for p in product_imgs if p in relevant_set]
+        lifestyle_imgs = [p for p in lifestyle_imgs if p in relevant_set]
 
     # Sort each list: landscape-first (wider images get priority)
     brand_imgs = _sort_by_aspect(brand_imgs)
@@ -77,6 +95,139 @@ async def collect_images(
         "lifestyle": lifestyle_imgs,
         "all": brand_imgs + product_imgs + lifestyle_imgs,
     }
+
+
+async def _filter_relevant_images(
+    image_paths: list[Path],
+    brand_name: str,
+    category_keywords: list[str] = None,
+) -> list[Path] | None:
+    """Use Claude Vision to filter out images unrelated to the brand/product.
+
+    Sends batches of thumbnails to Claude and asks which ones are relevant
+    to the brand and its product category. Returns only the relevant paths,
+    or None if Vision is unavailable (caller keeps all images).
+    """
+    import base64
+    import io
+
+    if not image_paths:
+        return None
+
+    # Skip tiny/broken images, skip already-filtered prefixes
+    # Auto-keep brand_ images (explicitly collected brand assets) and
+    # images with brand name in filename — these are always relevant
+    brand_lower = brand_name.lower().replace(" ", "")
+    auto_keep = []
+    candidates = []
+    for p in image_paths:
+        name = p.name.lower()
+        if any(name.startswith(pfx) for pfx in ("_cropped", "segment_bg", "persona_", "hero_", "topic_")):
+            continue
+        try:
+            from PIL import Image
+            w, h = Image.open(p).size
+            if w < 200 or h < 200:
+                continue
+        except Exception:
+            continue
+        # brand_ prefixed files go through Vision filter too (may be wrong site screenshots)
+        candidates.append(p)
+
+    if not candidates:
+        return auto_keep or None  # auto_keep is now always empty but kept for safety
+
+    try:
+        from config import ANTHROPIC_API_KEY, MODEL_SONNET
+        import anthropic
+        if not ANTHROPIC_API_KEY:
+            return None
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    except Exception as e:
+        print(f"[image_collector] Vision filter init failed: {e}")
+        return None
+
+    category_hint = ", ".join(category_keywords[:3]) if category_keywords else "consumer products"
+    relevant = []
+
+    # Process in batches of 20 (Vision token budget)
+    batch_size = 20
+    for batch_start in range(0, len(candidates), batch_size):
+        batch = candidates[batch_start:batch_start + batch_size]
+
+        content = [{"type": "text", "text": (
+            f"I collected these {len(batch)} images for a brand presentation about \"{brand_name}\" "
+            f"(category: {category_hint}).\n\n"
+            f"For EACH image, reply YES or NO:\n"
+            f"- YES: product photos of {brand_name}'s actual products ({category_hint}), "
+            f"brand packaging, lifestyle shots WITH the product visible, "
+            f"retail/e-commerce listings showing {brand_name} products, brand campaigns, "
+            f"product collections, website screenshots that SHOW {brand_name}'s products, "
+            f"store displays, logo/branding assets.\n"
+            f"- NO: images from a DIFFERENT company/brand that happens to share the name, "
+            f"certificates/awards from unrelated organizations, "
+            f"random people WITHOUT any {category_hint} product visible, "
+            f"stock photos of scenery/nature, generic clip art, abstract art, "
+            f"tiny icons/buttons, blurry/broken images, "
+            f"images from a completely different industry (e.g., edtech, education, "
+            f"astronomy if the brand sells {category_hint}), "
+            f"or images where the product is NOT {category_hint}.\n\n"
+            f"BE STRICT: If an image is not clearly related to {brand_name}'s {category_hint} "
+            f"products, mark NO. When in doubt, mark NO — it's better to have fewer good images "
+            f"than many irrelevant ones.\n"
+            f"Format: one line per image, just the number and YES/NO.\nExample:\n1 YES\n2 NO\n3 YES"
+        )}]
+
+        for i, img_path in enumerate(batch):
+            try:
+                from PIL import Image
+                img = Image.open(img_path).convert("RGB")
+                w, h = img.size
+                if w > 300 or h > 300:
+                    ratio = min(300 / w, 300 / h)
+                    img = img.resize((int(w * ratio), int(h * ratio)))
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                img.close()
+                b64 = base64.b64encode(buf.getvalue()).decode()
+                content.append({"type": "text", "text": f"\nImage {i+1} ({img_path.name[:40]}):"})
+                content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}})
+            except Exception:
+                content.append({"type": "text", "text": f"\nImage {i+1}: [failed to load]"})
+
+        try:
+            response = client.messages.create(
+                model=MODEL_SONNET,
+                max_tokens=512,
+                messages=[{"role": "user", "content": content}],
+            )
+            answer = response.content[0].text.strip()
+            for line in answer.splitlines():
+                line = line.strip().upper()
+                # Parse "1 YES", "2. YES", "3: NO" etc.
+                parts = re.split(r'[\s.:)\-]+', line, maxsplit=1)
+                if len(parts) >= 2:
+                    try:
+                        idx = int(parts[0]) - 1
+                        if 0 <= idx < len(batch) and "YES" in parts[1]:
+                            relevant.append(batch[idx])
+                            print(f"[image_filter] KEEP: {batch[idx].name[:50]}")
+                        elif 0 <= idx < len(batch):
+                            print(f"[image_filter] DROP: {batch[idx].name[:50]}")
+                    except ValueError:
+                        continue
+        except Exception as e:
+            print(f"[image_filter] Vision batch failed ({e}), keeping only product/ecom images")
+            # On Vision failure, only keep images with product/ecom/brand prefixes
+            for bp in batch:
+                bn = bp.name.lower()
+                if any(bn.startswith(pfx) for pfx in ("ecom_", "product_", "amazon_", "brand_")):
+                    relevant.append(bp)
+
+    kept = len(relevant)
+    dropped = len(candidates) - kept
+    print(f"[image_filter] Result: {kept} kept, {dropped} dropped out of {len(candidates)} screened")
+    return relevant
 
 
 def _sort_by_aspect(paths: list[Path]) -> list[Path]:
@@ -157,8 +308,8 @@ async def _download_image(
                 else:
                     save_path.write_bytes(resp.content)
                 return save_path
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[image_collector] Download failed for {url[:80]}: {e}")
     return None
 
 
@@ -374,7 +525,7 @@ async def _collect_via_web_search(
       2. Fetch those pages via httpx and extract <img> src attributes
     """
     try:
-        from config import ANTHROPIC_API_KEY
+        from config import ANTHROPIC_API_KEY, MODEL_SONNET as _MODEL_SONNET
         if not ANTHROPIC_API_KEY:
             return []
     except ImportError:
@@ -398,7 +549,7 @@ Return a JSON array of page URLs: ["https://...", "https://..."]
 Return 5-8 URLs. Return ONLY the JSON array."""
 
         response = client.messages.create(
-            model="claude-sonnet-4-6",
+            model=_MODEL_SONNET,
             max_tokens=1500,
             tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}],
             messages=[{"role": "user", "content": prompt}],
@@ -491,87 +642,165 @@ Return 5-8 URLs. Return ONLY the JSON array."""
         return []
 
 
+async def _collect_amazon_screenshots(
+    img_dir: Path, brand_name: str,
+) -> list[Path]:
+    """Scrape Amazon product listing images for the brand.
+
+    Searches Amazon for the brand name and extracts high-res product images
+    from the search results and individual listing pages.
+    """
+    images = []
+    try:
+        async with httpx.AsyncClient(
+            follow_redirects=True, timeout=15,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+        ) as client:
+            # Search Amazon for the brand
+            search_url = f"https://www.amazon.com/s?k={brand_name.replace(' ', '+')}"
+            resp = await client.get(search_url)
+            if resp.status_code != 200:
+                return images
+
+            html = resp.text
+
+            # Extract high-res Amazon product images (m.media-amazon.com)
+            img_urls = set()
+
+            # Main product images from search results
+            for m in re.finditer(r'https://m\.media-amazon\.com/images/I/[A-Za-z0-9._%-]+', html):
+                url = m.group(0)
+                # Upgrade to high-res version
+                url = re.sub(r'\._[A-Z]+_[A-Z0-9,_]+_\.', '.', url)
+                img_urls.add(url)
+
+            # Also try to find ASIN links for individual product pages
+            asins = re.findall(r'/dp/([A-Z0-9]{10})', html)
+            for asin in asins[:3]:  # Check top 3 products
+                try:
+                    prod_resp = await client.get(f"https://www.amazon.com/dp/{asin}")
+                    if prod_resp.status_code == 200:
+                        prod_html = prod_resp.text
+                        for m in re.finditer(r'https://m\.media-amazon\.com/images/I/[A-Za-z0-9._%-]+', prod_html):
+                            url = m.group(0)
+                            url = re.sub(r'\._[A-Z]+_[A-Z0-9,_]+_\.', '.', url)
+                            img_urls.add(url)
+                except Exception:
+                    continue
+
+            print(f"[image_collector] Amazon: found {len(img_urls)} product image URLs")
+
+            # Download top images
+            for url in list(img_urls)[:15]:
+                fname = _img_filename(url, "amazon")
+                path = await _download_image(client, url, img_dir / fname, min_aspect=0.4)
+                if path:
+                    images.append(path)
+                if len(images) >= 8:
+                    break
+
+            print(f"[image_collector] Amazon: downloaded {len(images)} images")
+
+    except Exception as e:
+        print(f"[image_collector] Amazon scraping failed: {e}")
+
+    return images
+
+
 def infer_category_keywords(
     brand_name: str,
     category: str = "",
     brand_context: dict = None,
 ) -> list[str]:
-    """Generate semantically-aligned image search keywords from brand/category context.
+    """Generate semantically-aligned image search keywords for brand/category.
 
-    Called by the pipeline to produce better stock photo matches.
+    Strategy:
+    1. Use Claude to dynamically generate precise search terms for THIS brand (best quality)
+    2. Fall back to static keyword map if Claude unavailable
+    3. Generic fallback as last resort
     """
-    keywords = []
-
+    # Build context for Claude
+    cat_name = category or ""
+    target_audience = ""
+    hero_products = ""
     if brand_context:
-        cat = brand_context.get("category_landscape", {})
-        cat_name = cat.get("category_name", category)
-        if cat_name:
-            keywords.append(cat_name)
-
+        cat_land = brand_context.get("category_landscape", {})
+        cat_name = cat_land.get("category_name", cat_name)
         pos = brand_context.get("brand_positioning", {})
-        target = pos.get("target_audience", "")
-        if target:
-            keywords.append(target.split(",")[0].strip()[:50])
+        target_audience = pos.get("target_audience", "")
+        heroes = brand_context.get("hero_products", [])
+        if heroes:
+            hero_names = [h.get("name", h) if isinstance(h, dict) else str(h) for h in heroes[:3]]
+            hero_products = ", ".join(hero_names)
 
-    if category:
-        keywords.append(category)
+    # Strategy 1: Claude dynamic generation (produces precise, brand-specific search terms)
+    try:
+        from config import ANTHROPIC_API_KEY, MODEL_HAIKU
+        if ANTHROPIC_API_KEY:
+            from anthropic import Anthropic
+            client = Anthropic(api_key=ANTHROPIC_API_KEY)
 
-    category_image_map = {
-        # Drinkware / water bottles
-        "water bottle": ["water bottle outdoor hiking active", "insulated bottle lifestyle", "reusable bottle workout gym"],
-        "bottle": ["reusable water bottle lifestyle", "insulated bottle outdoors active", "drinkware modern design"],
-        "tumbler": ["insulated tumbler coffee lifestyle", "stainless tumbler travel commute", "tumbler daily carry"],
-        "drinkware": ["drinkware lifestyle hydration", "water bottle active outdoor", "tumbler modern minimal"],
-        "flask": ["insulated flask outdoor adventure", "water flask hiking travel", "flask hydration active"],
-        # Medical / healthcare
-        "scrubs": ["nurse hospital professional", "healthcare worker scrubs", "medical team modern"],
-        "medical": ["healthcare professional", "medical team hospital", "nurse caring patient"],
-        # Baby / kids
-        "baby": ["mother baby nursery", "parent infant care", "baby product lifestyle"],
-        # Home / cleaning
-        "cleaning": ["clean home modern", "steam cleaning floor", "household cleaning product"],
-        "water filter": ["clean water kitchen", "water purification home", "family drinking water"],
+            context_parts = [f"Brand: {brand_name}"]
+            if cat_name:
+                context_parts.append(f"Category: {cat_name}")
+            if target_audience:
+                context_parts.append(f"Target audience: {target_audience}")
+            if hero_products:
+                context_parts.append(f"Hero products: {hero_products}")
+
+            response = client.messages.create(
+                model=MODEL_HAIKU,
+                max_tokens=200,
+                messages=[{"role": "user", "content": f"""Generate 5 Bing Image Search queries to find high-quality lifestyle and product photos for a brand discovery presentation.
+
+{chr(10).join(context_parts)}
+
+Requirements:
+- Mix of: product shots (clean, white background), lifestyle shots (people using the product), and brand environment shots
+- Each query should be 4-7 words, optimized for image search
+- Be specific to THIS brand's category — not generic
+
+Return ONLY a JSON array of 5 strings, nothing else.
+Example for a fitness brand: ["premium gym equipment modern studio", "woman training dumbbell workout", "athletic gear flat lay", "active lifestyle fitness outdoor", "modern gym interior design"]"""}],
+            )
+            text = response.content[0].text
+            start = text.find("[")
+            end = text.rfind("]") + 1
+            if start >= 0 and end > start:
+                keywords = json.loads(text[start:end])
+                if isinstance(keywords, list) and len(keywords) >= 3:
+                    print(f"[image_collector] Claude generated {len(keywords)} search terms for '{brand_name}'")
+                    return [str(k) for k in keywords[:5]]
+    except Exception as e:
+        print(f"[image_collector] AI keyword generation failed: {e}")
+
+    # Strategy 2: Static keyword map fallback
+    cat_lower = (cat_name or "").lower()
+    # Generic category → image search terms (no brand-specific entries)
+    _category_image_map = {
         "candle": ["candle cozy home ambiance", "home fragrance lifestyle", "candle relaxation self care"],
         "cookware": ["kitchen cookware modern", "cooking lifestyle gourmet", "kitchen product premium"],
         "furniture": ["modern home interior", "furniture lifestyle living room", "home decor minimal"],
-        "mattress": ["bedroom comfort sleep", "mattress lifestyle rest", "bedroom modern cozy"],
-        # Fashion / apparel
-        "bag": ["eco bag lifestyle", "sustainable fashion bag", "woman carrying bag urban"],
-        "lingerie": ["confident woman fashion", "intimate apparel lifestyle", "woman self care"],
-        "apparel": ["fashion lifestyle model", "casual wear street style", "modern clothing brand"],
-        "yoga": ["yoga practice woman", "fitness lifestyle mindful", "athleisure fashion"],
-        "shoe": ["sneaker lifestyle urban", "athletic shoe running", "shoe fashion street"],
-        "athletic": ["athletic wear workout", "fitness apparel active", "sportswear lifestyle"],
-        # Beauty / personal care
         "skincare": ["skincare routine woman", "beauty product lifestyle", "woman glowing skin"],
-        "haircare": ["hair care routine styling", "shampoo product lifestyle", "healthy hair beauty"],
         "makeup": ["makeup beauty lifestyle", "cosmetics product flat lay", "beauty routine morning"],
-        # Tech / electronics
         "headphone": ["headphone music lifestyle", "wireless earbuds commute", "audio tech modern"],
-        "speaker": ["bluetooth speaker outdoor", "speaker lifestyle music", "portable audio modern"],
-        "charger": ["tech gadget modern desk", "charging station minimal", "tech accessory lifestyle"],
-        # Outdoor / sports
-        "camping": ["camping outdoor adventure", "outdoor gear nature", "camping lifestyle equipment"],
+        "apparel": ["fashion lifestyle model", "casual wear street style", "modern clothing brand"],
+        "shoe": ["sneaker lifestyle urban", "athletic shoe running", "shoe fashion street"],
         "fitness": ["fitness gym workout", "exercise lifestyle active", "gym equipment modern"],
-        "running": ["running outdoor trail", "runner athlete lifestyle", "running shoes road"],
     }
 
-    cat_lower = (category or "").lower()
-    if brand_context:
-        cat_lower = brand_context.get("category_landscape", {}).get("category_name", cat_lower).lower()
-
-    for key, searches in category_image_map.items():
+    for key, searches in _category_image_map.items():
         if key in cat_lower:
-            keywords.extend(searches[:3])
-            break
+            return searches[:5]
 
-    if not keywords:
-        keywords = [
-            f"{brand_name} product lifestyle",
-            f"{brand_name} brand product photo",
-            "consumer product lifestyle premium",
-            "modern product design minimal",
-            "active lifestyle product photography",
-        ]
-
-    return keywords[:5]
+    # Strategy 3: Generic fallback
+    return [
+        f"{brand_name} product lifestyle",
+        f"{brand_name} brand product photo",
+        f"{cat_name or 'consumer product'} lifestyle premium",
+        "modern product design minimal",
+        "active lifestyle product photography",
+    ]

@@ -760,8 +760,18 @@ def _normalize_chart(raw: dict) -> dict:
     if "chart_type" not in chart and "type" in chart:
         chart["chart_type"] = chart["type"]
 
+    # Normalize variant type names to canonical chart_type
+    _type_aliases = {
+        "dual_donut": "dual", "dual_bar": "dual", "dual_hbar": "dual",
+        "bar": "hbar", "horizontal_bar": "hbar", "column": "vbar",
+        "doughnut": "donut", "ring": "donut",
+    }
+    ct_raw = chart.get("chart_type", "hbar")
+    chart["chart_type"] = _type_aliases.get(ct_raw, ct_raw)
+
     raw_data = chart.get("data", {})
-    if not raw_data:
+    # Don't return early — dual charts may use "charts" or "series" keys instead of "data"
+    if not raw_data and not chart.get("charts") and not chart.get("series") and not chart.get("words") and not chart.get("groups"):
         return chart
 
     ct = chart.get("chart_type", "hbar")
@@ -781,18 +791,49 @@ def _normalize_chart(raw: dict) -> dict:
 
     # Dual charts: data has two sub-dicts (e.g., gender/ethnicity, frequency/spend)
     if ct == "dual" and "left_categories" not in chart:
-        sub_keys = [k for k in data if isinstance(data[k], dict) and "labels" in data[k]]
-        if len(sub_keys) >= 2:
-            left_key, right_key = sub_keys[0], sub_keys[1]
-            left, right = data[left_key], data[right_key]
+        # Format C: "charts" list of [{label, data: [{label, value}]}] (from dual_donut)
+        sub_charts = chart.get("charts", [])
+        if isinstance(sub_charts, list) and len(sub_charts) >= 2:
+            left_chart, right_chart = sub_charts[0], sub_charts[1]
+            left_items = left_chart.get("data", [])
+            right_items = right_chart.get("data", [])
             chart["left_type"] = "donut"
-            chart["left_title"] = left_key.replace("_", " ").title()
-            chart["left_categories"] = left.get("labels", [])
-            chart["left_values"] = left.get("values", [])
+            chart["left_title"] = left_chart.get("label", "")
+            chart["left_categories"] = [d.get("label", "") for d in left_items]
+            chart["left_values"] = [d.get("value", 0) for d in left_items]
             chart["right_type"] = "hbar"
-            chart["right_title"] = right_key.replace("_", " ").title()
-            chart["right_categories"] = right.get("labels", [])
-            chart["right_values"] = right.get("values", [])
+            chart["right_title"] = right_chart.get("label", "")
+            chart["right_categories"] = [d.get("label", "") for d in right_items]
+            chart["right_values"] = [d.get("value", 0) for d in right_items]
+        # Format D: "series" list of [{label, data: [{label, value}]}] (from dual_bar)
+        elif not sub_charts:
+            series = chart.get("series", [])
+            if isinstance(series, list) and len(series) >= 2:
+                left_s, right_s = series[0], series[1]
+                left_items = left_s.get("data", [])
+                right_items = right_s.get("data", [])
+                chart["left_type"] = "hbar"
+                chart["left_title"] = left_s.get("label", "")
+                chart["left_categories"] = [d.get("label", "") for d in left_items]
+                chart["left_values"] = [d.get("value", 0) for d in left_items]
+                chart["right_type"] = "hbar"
+                chart["right_title"] = right_s.get("label", "")
+                chart["right_categories"] = [d.get("label", "") for d in right_items]
+                chart["right_values"] = [d.get("value", 0) for d in right_items]
+            else:
+                # Format A: data dict with two sub-dicts (labels/values arrays)
+                sub_keys = [k for k in data if isinstance(data[k], dict) and "labels" in data[k]]
+                if len(sub_keys) >= 2:
+                    left_key, right_key = sub_keys[0], sub_keys[1]
+                    left, right = data[left_key], data[right_key]
+                    chart["left_type"] = "donut"
+                    chart["left_title"] = left_key.replace("_", " ").title()
+                    chart["left_categories"] = left.get("labels", [])
+                    chart["left_values"] = left.get("values", [])
+                    chart["right_type"] = "hbar"
+                    chart["right_title"] = right_key.replace("_", " ").title()
+                    chart["right_categories"] = right.get("labels", [])
+                    chart["right_values"] = right.get("values", [])
 
     # Wordcloud: raw_data may be list of {text/word, weight} or dict with "words" key
     if ct == "wordcloud":
@@ -809,13 +850,22 @@ def _normalize_chart(raw: dict) -> dict:
 
     # Grouped bar: multiple input formats
     if ct == "grouped_bar":
-        # Format A: "series" with brand objects + "groups" as metric name strings
+        # Format A: "data" list of {brand, scores: [...]} + top-level "groups" as metric names
+        if isinstance(raw_data, list) and raw_data and isinstance(raw_data[0], dict) and "brand" in raw_data[0]:
+            group_names = chart.get("groups", [])
+            chart["categories"] = [d.get("brand", "") for d in raw_data]
+            chart["groups"] = [
+                {"name": g, "values": [d.get("scores", d.get("values", []))[i] if i < len(d.get("scores", d.get("values", []))) else 0 for d in raw_data]}
+                for i, g in enumerate(group_names)
+            ]
+            chart["horizontal"] = True
+        # Format B: "series" with brand objects + "groups" as metric name strings
         series = chart.get("series", data.get("series", []))
         group_names = chart.get("groups", data.get("groups", []))
-        if series and isinstance(series, list) and isinstance(series[0], dict) and group_names and isinstance(group_names, list) and isinstance(group_names[0], str):
+        if "categories" not in chart and series and isinstance(series, list) and isinstance(series[0], dict) and group_names and isinstance(group_names, list) and isinstance(group_names[0], str):
             chart["categories"] = [s.get("brand", s.get("name", "")) for s in series]
             chart["groups"] = [
-                {"name": g, "values": [s.get("values", [])[i] if i < len(s.get("values", [])) else 0 for s in series]}
+                {"name": g, "values": [s.get("values", s.get("scores", []))[i] if i < len(s.get("values", s.get("scores", []))) else 0 for s in series]}
                 for i, g in enumerate(group_names)
             ]
             chart["horizontal"] = True
@@ -835,21 +885,39 @@ def _normalize_chart(raw: dict) -> dict:
 
     # Matrix: data has brands/attributes/scores OR rows/columns/data
     if ct == "matrix":
-        if "row_labels" not in chart:
-            chart["row_labels"] = chart.get("rows") or data.get("attributes", data.get("rows", []))
-        if "col_labels" not in chart:
-            chart["col_labels"] = chart.get("columns") or data.get("brands", data.get("columns", []))
-        if "values" not in chart:
-            if isinstance(raw_data, list) and raw_data and isinstance(raw_data[0], list):
-                chart["values"] = raw_data
-            elif isinstance(raw_data, dict):
-                scores = data.get("scores", {})
+        # Format C: data is list of {brand, scores: {attr: value}}
+        if isinstance(raw_data, list) and raw_data and isinstance(raw_data[0], dict) and "brand" in raw_data[0]:
+            col_labels = chart.get("columns", [])
+            if not col_labels and "scores" in raw_data[0] and isinstance(raw_data[0]["scores"], dict):
+                col_labels = list(raw_data[0]["scores"].keys())
+            chart["row_labels"] = [d.get("brand", "") for d in raw_data]
+            chart["col_labels"] = col_labels
+            matrix_vals = []
+            for d in raw_data:
+                scores = d.get("scores", {})
                 if isinstance(scores, dict):
-                    brands = data.get("brands", [])
-                    attrs = data.get("attributes", [])
-                    chart["values"] = [[scores.get(b, [0]*len(attrs))[i] for b in brands] for i in range(len(attrs))]
-                elif isinstance(scores, list) and scores and isinstance(scores[0], list):
-                    chart["values"] = scores
+                    matrix_vals.append([scores.get(c, 0) for c in col_labels])
+                elif isinstance(scores, list):
+                    matrix_vals.append(scores)
+                else:
+                    matrix_vals.append([0] * len(col_labels))
+            chart["values"] = matrix_vals
+        else:
+            if "row_labels" not in chart:
+                chart["row_labels"] = chart.get("rows") or data.get("attributes", data.get("rows", []))
+            if "col_labels" not in chart:
+                chart["col_labels"] = chart.get("columns") or data.get("brands", data.get("columns", []))
+            if "values" not in chart:
+                if isinstance(raw_data, list) and raw_data and isinstance(raw_data[0], list):
+                    chart["values"] = raw_data
+                elif isinstance(raw_data, dict):
+                    scores = data.get("scores", {})
+                    if isinstance(scores, dict):
+                        brands = data.get("brands", [])
+                        attrs = data.get("attributes", [])
+                        chart["values"] = [[scores.get(b, [0]*len(attrs))[i] for b in brands] for i in range(len(attrs))]
+                    elif isinstance(scores, list) and scores and isinstance(scores[0], list):
+                        chart["values"] = scores
 
     return chart
 

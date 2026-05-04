@@ -69,8 +69,8 @@ async def scrape_ecommerce(brand_name: str, urls: list[str] = None) -> dict:
 
             await browser.close()
 
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[ecommerce] Scraping failed for {brand_name}: {e}")
 
     # Calculate summary stats
     if result["products"]:
@@ -123,6 +123,10 @@ async def _search_amazon(page, brand_name: str) -> list[dict]:
                         const reviewMatch = reviewText.match(/(\d+)/);
                         const reviewCount = reviewMatch ? parseInt(reviewMatch[1]) : 0;
 
+                        // Extract product image
+                        const imgEl = el.querySelector('.s-image, .s-product-image-container img');
+                        const imageUrl = imgEl ? imgEl.getAttribute('src') : '';
+
                         items.push({
                             name: titleEl.textContent.trim().slice(0, 200),
                             price: price,
@@ -131,14 +135,15 @@ async def _search_amazon(page, brand_name: str) -> list[dict]:
                             description: '',
                             features: [],
                             url: linkEl ? 'https://www.amazon.com' + linkEl.getAttribute('href') : '',
+                            image_url: imageUrl || '',
                         });
                     }
                 });
                 return items.slice(0, 20);
             }
         """)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[ecommerce] Amazon search failed: {e}")
 
     return products
 
@@ -170,6 +175,10 @@ async def _scrape_amazon_page(page, url: str) -> list[dict]:
                     const priceText = price ? price.textContent.trim() : '';
                     const priceMatch = priceText.match(/[\d,.]+/);
 
+                    // Get main product image
+                    const imgEl = document.querySelector('#landingImage, #imgBlkFront, #main-image-container img');
+                    const imageUrl = imgEl ? (imgEl.getAttribute('data-old-hires') || imgEl.getAttribute('src')) : '';
+
                     return {
                         name: title ? title.textContent.trim() : '',
                         price: priceMatch ? parseFloat(priceMatch[0].replace(',', '')) : 0,
@@ -178,6 +187,7 @@ async def _scrape_amazon_page(page, url: str) -> list[dict]:
                         description: desc ? desc.textContent.trim().slice(0, 500) : '',
                         features: features.slice(0, 8),
                         url: window.location.href,
+                        image_url: imageUrl || '',
                     };
                 }
             """)
@@ -187,8 +197,8 @@ async def _scrape_amazon_page(page, url: str) -> list[dict]:
             # Brand/search results page
             products = await _search_amazon(page, "")
 
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[ecommerce] Amazon scrape error for {url}: {e}")
 
     return products
 
@@ -214,6 +224,13 @@ async def _scrape_shopify_store(page, url: str) -> list[dict]:
                 except (ValueError, TypeError):
                     pass
 
+            # Get primary image from Shopify product data
+            image_url = ""
+            if item.get("images") and len(item["images"]) > 0:
+                image_url = item["images"][0].get("src", "")
+            elif item.get("image"):
+                image_url = item["image"].get("src", "")
+
             products.append({
                 "name": item.get("title", ""),
                 "price": price,
@@ -222,9 +239,10 @@ async def _scrape_shopify_store(page, url: str) -> list[dict]:
                 "description": _strip_html(item.get("body_html", ""))[:500],
                 "features": [tag for tag in item.get("tags", [])[:8]],
                 "url": f"{base_url}/products/{item.get('handle', '')}",
+                "image_url": image_url,
             })
-    except Exception:
-        # Fallback to scraping the HTML
+    except Exception as e:
+        print(f"[ecommerce] Shopify JSON failed, falling back to HTML: {e}")
         products = await _scrape_generic_store(page, url)
 
     return products
@@ -247,6 +265,12 @@ async def _scrape_generic_store(page, url: str) -> list[dict]:
                         const items = Array.isArray(data) ? data : [data];
                         items.forEach(item => {
                             if (item['@type'] === 'Product') {
+                                // Extract image from JSON-LD
+                                let imgUrl = '';
+                                if (typeof item.image === 'string') imgUrl = item.image;
+                                else if (Array.isArray(item.image) && item.image.length > 0) imgUrl = typeof item.image[0] === 'string' ? item.image[0] : (item.image[0].url || '');
+                                else if (item.image?.url) imgUrl = item.image.url;
+
                                 products.push({
                                     name: item.name || '',
                                     price: item.offers?.price ? parseFloat(item.offers.price) : 0,
@@ -255,6 +279,7 @@ async def _scrape_generic_store(page, url: str) -> list[dict]:
                                     description: (item.description || '').slice(0, 500),
                                     features: [],
                                     url: item.url || window.location.href,
+                                    image_url: imgUrl,
                                 });
                             }
                         });
@@ -263,8 +288,8 @@ async def _scrape_generic_store(page, url: str) -> list[dict]:
                 return products.slice(0, 20);
             }
         """)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[ecommerce] Generic store scrape failed: {e}")
 
     return products
 

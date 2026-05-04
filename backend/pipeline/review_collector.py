@@ -246,33 +246,37 @@ async def _scrape_page_reviews(page, url: str) -> list[dict]:
 
 # ── NLP / Sentiment Analysis ──────────────────────────────────
 
-# Keyword-based sentiment (no external NLP library needed)
+# ── Universal sentiment words (category-agnostic) ──────────────
+# These are general consumer sentiment signals that apply to ANY product category.
 POSITIVE_WORDS = {
-    "love", "great", "excellent", "amazing", "perfect", "comfortable", "soft",
-    "quality", "recommend", "best", "favorite", "worth", "durable", "fits",
-    "happy", "pleased", "wonderful", "fantastic", "awesome", "impressed",
-    "sturdy", "nice", "good", "beautiful", "lovely", "smooth", "lightweight",
-    "breathable", "stretchy", "flattering", "stylish", "professional",
+    "love", "great", "excellent", "amazing", "perfect", "quality", "recommend",
+    "best", "favorite", "worth", "durable", "happy", "pleased", "wonderful",
+    "fantastic", "awesome", "impressed", "sturdy", "nice", "good", "beautiful",
+    "lovely", "smooth", "lightweight", "reliable", "solid", "premium",
+    "convenient", "easy", "effective", "innovative", "well-made", "superb",
 }
 
 NEGATIVE_WORDS = {
     "bad", "poor", "terrible", "worst", "disappointed", "cheap", "broke",
-    "ripped", "shrunk", "faded", "uncomfortable", "stiff", "scratchy",
-    "thin", "flimsy", "loose", "tight", "short", "long", "wrong",
-    "returned", "refund", "waste", "overpriced", "misleading", "smell",
-    "pilling", "wrinkled", "see-through", "itchy", "hot", "unflattering",
+    "broken", "defective", "uncomfortable", "flimsy", "wrong", "returned",
+    "refund", "waste", "overpriced", "misleading", "smell", "leaked",
+    "cracked", "failed", "useless", "fragile", "annoying", "frustrating",
+    "regret", "junk", "garbage", "horrible", "awful", "inferior",
 }
 
-# Theme categories for product reviews
+# ── Universal theme categories (category-agnostic) ─────────────
+# Broad themes that apply to virtually any consumer product.
+# The AI-powered path (_analyze_sentiment_ai) produces category-specific themes;
+# this is the keyword fallback when no API key is available.
 THEME_KEYWORDS = {
-    "comfort": ["comfort", "comfortable", "cozy", "soft", "cushion", "ease"],
-    "fit": ["fit", "fits", "fitting", "size", "sizing", "tight", "loose", "snug", "baggy"],
-    "durability": ["durable", "lasting", "wash", "faded", "shrunk", "ripped", "pilling", "held up"],
-    "material/fabric": ["fabric", "material", "cotton", "polyester", "stretchy", "breathable", "moisture"],
-    "style/appearance": ["style", "look", "color", "design", "professional", "flattering", "cute"],
-    "pockets": ["pocket", "pockets", "storage", "zipper pocket"],
-    "value/price": ["price", "value", "worth", "expensive", "cheap", "affordable", "money"],
-    "shipping/service": ["shipping", "delivery", "customer service", "return", "exchange"],
+    "quality/build": ["quality", "well-made", "well made", "solid", "premium", "build", "construction", "craftsmanship"],
+    "durability": ["durable", "lasting", "broke", "broken", "held up", "wear and tear", "longevity", "sturdy"],
+    "design/appearance": ["design", "look", "looks", "color", "style", "aesthetic", "appearance", "beautiful", "ugly"],
+    "ease of use": ["easy", "convenient", "simple", "intuitive", "hassle", "complicated", "difficult", "user-friendly"],
+    "value/price": ["price", "value", "worth", "expensive", "cheap", "affordable", "money", "overpriced", "deal"],
+    "performance": ["performance", "works", "effective", "efficient", "powerful", "functional", "reliable", "consistent"],
+    "comfort/feel": ["comfort", "comfortable", "soft", "smooth", "ergonomic", "grip", "feel", "pleasant"],
+    "shipping/service": ["shipping", "delivery", "customer service", "return", "exchange", "support", "warranty"],
 }
 
 
@@ -352,10 +356,14 @@ def _extract_themes(reviews: list[dict]) -> dict:
 # ── AI-Powered Sentiment Analysis ───────────────────────────
 
 def _analyze_sentiment_ai(reviews: list[dict]) -> dict | None:
-    """Use Claude Haiku for NLP-level sentiment + theme analysis."""
+    """Use Claude for NLP-level sentiment + theme analysis.
+
+    Produces category-specific themes derived from the actual review content,
+    not hardcoded theme lists. Works for any product category.
+    """
     try:
         from anthropic import Anthropic
-        from config import ANTHROPIC_API_KEY
+        from config import ANTHROPIC_API_KEY, MODEL_HAIKU
     except ImportError:
         return None
 
@@ -374,24 +382,43 @@ def _analyze_sentiment_ai(reviews: list[dict]) -> dict | None:
     if not review_texts:
         return None
 
-    prompt = f"""Analyze these {len(review_texts)} customer product reviews. Return ONLY a JSON object with:
+    prompt = f"""Analyze these {len(review_texts)} customer product reviews. Return ONLY a JSON object.
 
-1. "sentiment": {{"positive_pct": number, "negative_pct": number, "neutral_pct": number}} (must sum to 100)
-2. "themes": {{
-     "positive": [{{"theme": "name", "count": estimated_count, "examples": ["quote1", "quote2"]}}],
-     "negative": [{{"theme": "name", "count": estimated_count, "examples": ["quote1", "quote2"]}}]
-   }}
+IMPORTANT: Derive themes from the ACTUAL review content — do NOT use generic templates.
+Read the reviews first, identify what product category this is, then extract themes
+that are specific and meaningful for THIS category.
 
-Identify 4-8 themes per category. Use short theme names (e.g., "comfort", "fit", "durability").
-Examples should be direct quotes from the reviews (1 sentence each).
+For example:
+- Skincare reviews → themes like "skin reaction", "absorption", "scent", "packaging"
+- Electronics reviews → themes like "battery life", "connectivity", "setup", "display quality"
+- Apparel reviews → themes like "fit/sizing", "fabric feel", "wash durability", "style"
+- Kitchenware reviews → themes like "heat distribution", "non-stick durability", "handle comfort"
+
+Return this JSON structure:
+{{
+  "sentiment": {{"positive_pct": number, "negative_pct": number, "neutral_pct": number}},
+  "themes": {{
+    "positive": [{{"theme": "category-specific theme name", "count": estimated_count, "examples": ["direct quote 1", "direct quote 2"]}}],
+    "negative": [{{"theme": "category-specific theme name", "count": estimated_count, "examples": ["direct quote 1", "direct quote 2"]}}]
+  }}
+}}
+
+Rules:
+- sentiment percentages must sum to 100
+- Identify 4-8 themes per sentiment (positive/negative)
+- Theme names must be SHORT (1-3 words) and SPECIFIC to this product category
+- "count" = how many reviews mention this theme (estimate based on the sample)
+- "examples" = 1-2 direct quotes from the reviews (1 sentence each, verbatim)
+- Do NOT use generic theme names like "quality" or "overall satisfaction"
+  — be specific: "build quality", "seal integrity", "color accuracy", etc.
 
 Reviews:
 {chr(10).join(review_texts)}"""
 
     try:
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=2000,
+            model=MODEL_HAIKU,
+            max_tokens=3000,
             messages=[{"role": "user", "content": prompt}],
         )
         text = response.content[0].text
