@@ -47,3 +47,20 @@ case_vectors_meta.json
 
 # Runtime generated data
 backend/tasks/ingested_cases.json
+
+# Sensitive: contains real client/person names, internal decisions, or demo scripts
+tasks/Anthony_Requirements_Audit.md
+tasks/Knowledge_Base_Enhancement_Roadmap.md
+tasks/Claude_Code_KB_Enhancement_Prompts.md
+tasks/Datacube_Roadmap.md
+tasks/Claude_Code_Datacube_Prompt.md
+backend/tasks/demo_script_module_b.md
+backend/tasks/Datacube_Acceptance_Audit.md
+backend/tasks/Datacube_Verification.md
+backend/tasks/KB_Enhancement_Verification.md
+
+# Runtime state
+backend/tasks/watcher_state.json
+
+# Orphan lockfile (no backend/package.json yet)
+backend/package-lock.json
